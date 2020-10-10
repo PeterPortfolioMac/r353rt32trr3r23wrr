@@ -12,10 +12,55 @@
 </div>
 <script>
 var d = new Date().getDay();
-var titles = ['<a href="tel:+40316301088,,000000,,,,,,000000#">LUNI</a>', '<a href="tel:+40316301088,,000000,,,,,,000000#">MARTI</a>', '<a href="tel:+40316301088,,000000,,,,,,000000#">MIERCURI</a>', '<a href="tel:+40316301088,,000000,,,,,,000000#">JOI</a>', '<a href="tel:+40316301088,,000000,,,,,,000000#">VINERI</a>', '<a href="tel:+40316301088,,85092060726,,,,,,196208#">SAMBATA 1</a> | <a href="tel:+40316301088,,000000,,,,,,000000#">SAMBATA 2</a>', '<a href="tel:+40316301088,,000000,,,,,,000000#">DUMINICA</a>'];
+var titles = ['title 1', 'title 2', 'title 3', 'title 4', 'title 5', '<a href="tel:+40316301088,,81033527950,,,,,,261508#">SAMBATA 1</a> | <a href="tel:+40316301088,,85092060726,,,,,,196208#">SAMBATA 2</a>', '<a href="tel:+40316301088,,85092060726,,,,,,196208#">DUMINICA</a>'];
 
 document.getElementById("title").innerHTML = titles[d-1];
 </script>
+
+
+
+
+
+
+<div class="row">
+    <div class="column large-6 medium-6 small-12">
+        
+        <h3 style="text-align: center;"><span style="font-size:72px"><div id="text"></div></h3>
+        <a href="More details medium-6 small-12"></a>
+    </div>
+    <div class="column large-6"><img id="yourImageId" src="df" alt="DEMO" /></div>
+</div>
+
+<script>
+var dailyPhotos;
+var today, img;
+dailyPhotos = function() {
+    today = new Date();
+    weekday = today.getDay();
+    showImages = [];
+    myPhotos = ["", "", "", "", "", "", ""]; // You must specify the path or file name of your images that will be loaded in a weekday basis.
+    myText = ['<a href="tel:+40316301088,,81033527950,,,,,,261508#">DUMINICA</a>', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', ];
+    img = ((document.getElementById) ? document.getElementById("yourImageId") : document.images.yourImageId); // Specify the id of the image that will get raplaced daily.
+    img.src = myPhotos[weekday];
+    img.alt = myPhotos[weekday];
+    text = ((document.getElementById) ? document.getElementById("text") : document.images.yourImageId);
+    text.innerHTML = myText[weekday];
+};
+dailyPhotos();
+
+</script>
+
+
+
+
+
+
+
+
+
+
+
+
 
 </body>
 </html>
