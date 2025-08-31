@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<script src="https://cdn.jsdelivr.net/npm/opentype.js@latest/dist/opentype.min.js"></script>
+
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Generator Bannere Vectoriale</title>
+  <style>
+    :root{ --panel-w:360px; --gap:10px; font-family:system-ui,Segoe UI,Roboto,Arial; }
+    body{ margin:0; display:flex; height:100vh; gap:var(--gap); background:#f3f4f6; }
+    .sidebar{ width:var(--panel-w); padding:16px; box-sizing:border-box; overflow:auto; background:white; border-right:1px solid #e5e7eb;}
+    .canvas-wrap{flex:1; display:flex; align-items:center; justify-content:center;}
+    .stage{ background:transparent; box-shadow:0 6px 18px rgba(0,0,0,.12); }
+    label{ display:block; margin-top:10px; font-size:13px; color:#374151 }
+    input[type="text"], input[type="number"], select, textarea{ width:100%; padding:8px; box-sizing:border-box; margin-top:6px; }
+    .row{ display:flex; gap:8px; }
+    .row > *{ flex:1 }
+    button{ padding:8px 10px; margin-top:8px; cursor:pointer }
+    .controls-grid{ display:grid; grid-template-columns:1fr 1fr; gap:8px }
+    .small{ font-size:13px; padding:6px }
+    .arrow-grid{ display:grid; grid-template-columns:repeat(3,40px); grid-template-rows:repeat(3,40px); gap:6px; justify-content:center; align-items:center }
+    .arrow-grid button{ width:40px; height:40px }
+    .stage-outer{ background:checkerboard; display:flex; align-items:center; justify-content:center }
+    /* checkerboard background for transparency preview */
+    .checker{ background-image: linear-gradient(45deg,#ddd 25%, transparent 25%), linear-gradient(-45deg,#ddd 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ddd 75%), linear-gradient(-45deg, transparent 75%, #ddd 75%); background-size:20px 20px; background-position:0 0,0 10px,10px -10px, -10px 0px; }
+    footer{ font-size:12px; color:#6b7280; margin-top:12px }
+    .btn-primary{ background:#111827; color:white; border: none }
+    .btn-ghost{ background:#fff; border:1px solid #e5e7eb }
+    textarea{ height:140px; font-family:monospace; font-size:12px }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/opentype.js@latest/dist/opentype.min.js"></script>
+  <script src="opentype.min.js"></script>
+  <script>
+    // Font definitions
+    const FONTS = [
+      { id: 'playlist_script', name: 'Playlist Script', url: 'fonts/Playlist_Script.ttf' },
+      { id: 'playlist_ornament', name: 'Playlist Ornament', url: 'fonts/Playlist_Ornament.woff' },
+      { id: 'playlist_caps', name: 'Playlist Caps', url: 'fonts/Playlist_Caps.woff' }
+    ];
+
+    // helper to load a font via FontFace API
+    async function loadFont(fontId, url) {
+      try {
+        const f = new FontFace(fontId, `url(${url})`);
+        await f.load();
+        document.fonts.add(f);
+        return true;
+      } catch (e) {
+        console.warn('Font load failed', e);
+        return false;
+      }
+    }
+
+    // Utility to read file as dataURL
+    function fileToDataURL(file){
+      return new Promise((res,rej)=>{
+        const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(file);
+      })
+    }
+
+    // convert ArrayBuffer to base64
+    function arrayBufferToBase64(buffer){
+      let binary = '';
+      const bytes = new Uint8Array(buffer);
+      const chunk = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunk) {
+        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+      }
+      return btoa(binary);
+    }
+
+    document.addEventListener('DOMContentLoaded', async ()=>{
+      // cache DOM
+      const txtInput = document.getElementById('text');
+      const fontSelect = document.getElementById('font');
+      const fontSizeInput = document.getElementById('fontSize');
+      const colorInput = document.getElementById('color');
+      const widthInput = document.getElementById('width');
+      const heightInput = document.getElementById('height');
+      const bgFileInput = document.getElementById('bgFile');
+      const bgPosX = document.getElementById('bgPosX');
+      const bgPosY = document.getElementById('bgPosY');
+      const bgScale = document.getElementById('bgScale');
+      const moveTextUp = document.getElementById('moveUp');
+      const moveTextDown = document.getElementById('moveDown');
+      const stageContainer = document.getElementById('stageContainer');
+      const recipeArea = document.getElementById('recipe');
+      const applyRecipeBtn = document.getElementById('applyRecipe');
+      const exportRecipeBtn = document.getElementById('exportRecipe');
+      const savePngBtn = document.getElementById('savePng');
+      const saveSvgBtn = document.getElementById('saveSvg');
+      const bgLeft = document.getElementById('bgLeft');
+      const bgRight = document.getElementById('bgRight');
+      const bgUp = document.getElementById('bgUp');
+      const bgDown = document.getElementById('bgDown');
+      const preview = document.getElementById('preview');
+
+      // populate fonts select
+      FONTS.forEach(f=>{
+        const opt = document.createElement('option'); opt.value = f.id; opt.textContent = `${f.name}`; opt.dataset.url = f.url; fontSelect.appendChild(opt);
+      });
+
+      // state
+      const state = {
+        width: 1920, height: 1080,
+        text: 'Text de test',
+        fontId: FONTS[0].id, fontUrl: FONTS[0].url,
+        fontSize: 160, color: '#111111',
+        textOffsetY: 0, // relative vertical shift
+        bgDataURL: null, bgType:null, // image data url
+        bgPos: { x:0.5, y:0.5 }, // center by default [0..1]
+        bgScalePercent: 100
+      };
+
+      // load default font
+      await loadFont(state.fontId, state.fontUrl);
+
+      // initialize inputs
+      txtInput.value = state.text;
+      fontSelect.value = state.fontId;
+      fontSizeInput.value = state.fontSize;
+      colorInput.value = state.color;
+      widthInput.value = state.width;
+      heightInput.value = state.height;
+      bgScale.value = state.bgScalePercent;
+      bgPosX.value = Math.round(state.bgPos.x*100);
+      bgPosY.value = Math.round(state.bgPos.y*100);
+
+      // draw preview using an offscreen canvas each time
+      function drawPreview(){
+        const w = state.width, h = state.height;
+        preview.width = w; preview.height = h;
+        const ctx = preview.getContext('2d');
+        // clear (transparent)
+        ctx.clearRect(0,0,w,h);
+        // draw background if exists
+        if(state.bgDataURL){
+          const img = new Image();
+          img.onload = ()=>{
+            const scale = state.bgScalePercent/100;
+            const dw = img.width * scale; const dh = img.height * scale;
+            // compute position so that bgPos maps to center of canvas
+            const x = state.bgPos.x * w - dw/2;
+            const y = state.bgPos.y * h - dh/2;
+            ctx.drawImage(img, x, y, dw, dh);
+            drawText(ctx);
+          }
+          img.onerror = ()=>{ console.warn('bg load err'); drawText(ctx); }
+          img.src = state.bgDataURL;
+        } else {
+          // transparent background just draw text
+          drawText(ctx);
+        }
+      }
+
+      function drawText(ctx){
+        // ensure font is available; use fontId as family
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = state.color;
+        const fontStr = `${state.fontSize}px '${state.fontId}'`;
+        ctx.font = fontStr;
+        // multiline support
+        const lines = state.text.split('\n');
+        const centerX = state.width/2;
+        const centerY = state.height/2 + state.textOffsetY;
+        const lineHeight = state.fontSize * 1.05;
+        const startY = centerY - (lines.length-1)/2 * lineHeight;
+        lines.forEach((line,i)=>{
+          ctx.fillText(line, centerX, startY + i*lineHeight);
+        });
+        ctx.restore();
+      }
+
+      // when fonts change, load new font; maintain all other state
+      fontSelect.addEventListener('change', async (e)=>{
+        const sel = e.target.selectedOptions[0];
+        const url = sel.dataset.url;
+        const id = sel.value;
+        state.fontId = id; state.fontUrl = url;
+        await loadFont(id, url);
+        drawPreview();
+      });
+
+      // inputs listeners
+      txtInput.addEventListener('input', (e)=>{ state.text = e.target.value; drawPreview(); });
+      fontSizeInput.addEventListener('input', (e)=>{ state.fontSize = Number(e.target.value); drawPreview(); });
+      colorInput.addEventListener('input', (e)=>{ state.color = e.target.value; drawPreview(); });
+      widthInput.addEventListener('input', (e)=>{ state.width = Math.max(1, Number(e.target.value)); drawPreview(); updateStageSize(); });
+      heightInput.addEventListener('input', (e)=>{ state.height = Math.max(1, Number(e.target.value)); drawPreview(); updateStageSize(); });
+
+      moveTextUp.addEventListener('click', ()=>{ state.textOffsetY -= 10; drawPreview(); });
+      moveTextDown.addEventListener('click', ()=>{ state.textOffsetY += 10; drawPreview(); });
+
+      // background controls
+      bgFileInput.addEventListener('change', async (e)=>{
+        const f = e.target.files[0];
+        if(!f) return;
+        const data = await fileToDataURL(f);
+        state.bgDataURL = data; state.bgType = f.type;
+        drawPreview();
+      });
+
+      bgScale.addEventListener('input', (e)=>{ state.bgScalePercent = Number(e.target.value); drawPreview(); });
+      bgPosX.addEventListener('input', (e)=>{ state.bgPos.x = Number(e.target.value)/100; drawPreview(); });
+      bgPosY.addEventListener('input', (e)=>{ state.bgPos.y = Number(e.target.value)/100; drawPreview(); });
+
+      bgLeft.addEventListener('click', ()=>{ state.bgPos.x = Math.max(0, state.bgPos.x - 0.05); bgPosX.value = Math.round(state.bgPos.x*100); drawPreview(); });
+      bgRight.addEventListener('click', ()=>{ state.bgPos.x = Math.min(1, state.bgPos.x + 0.05); bgPosX.value = Math.round(state.bgPos.x*100); drawPreview(); });
+      bgUp.addEventListener('click', ()=>{ state.bgPos.y = Math.max(0, state.bgPos.y - 0.05); bgPosY.value = Math.round(state.bgPos.y*100); drawPreview(); });
+      bgDown.addEventListener('click', ()=>{ state.bgPos.y = Math.min(1, state.bgPos.y + 0.05); bgPosY.value = Math.round(state.bgPos.y*100); drawPreview(); });
+
+      // recipe: export current state to JSON
+      exportRecipeBtn.addEventListener('click', async ()=>{
+        // include bg as data URL if present; include font urls
+        const recipe = { ...state };
+        recipe.created = (new Date()).toISOString();
+        recipe.fonts = FONTS; // helpful
+        recipeArea.value = JSON.stringify(recipe, null, 2);
+      });
+
+      // apply recipe from textarea
+      applyRecipeBtn.addEventListener('click', async ()=>{
+        try{
+          const r = JSON.parse(recipeArea.value);
+          // merge but preserve properties we expect
+          state.width = r.width || state.width;
+          state.height = r.height || state.height;
+          state.text = r.text ?? state.text;
+          state.fontId = r.fontId || state.fontId;
+          state.fontUrl = r.fontUrl || state.fontUrl;
+          state.fontSize = r.fontSize || state.fontSize;
+          state.color = r.color || state.color;
+          state.textOffsetY = r.textOffsetY || 0;
+          state.bgDataURL = r.bgDataURL || null;
+          state.bgType = r.bgType || state.bgType;
+          state.bgPos = r.bgPos || state.bgPos;
+          state.bgScalePercent = r.bgScalePercent || state.bgScalePercent;
+
+          // update UI
+          txtInput.value = state.text;
+          fontSelect.value = state.fontId;
+          fontSizeInput.value = state.fontSize;
+          colorInput.value = state.color;
+          widthInput.value = state.width; heightInput.value = state.height;
+          bgScale.value = state.bgScalePercent;
+          bgPosX.value = Math.round(state.bgPos.x*100); bgPosY.value = Math.round(state.bgPos.y*100);
+
+          await loadFont(state.fontId, state.fontUrl);
+          drawPreview(); updateStageSize();
+        }catch(err){ alert('Recipe invalid: '+err.message); }
+      });
+
+      // export PNG
+      savePngBtn.addEventListener('click', ()=>{
+        const a = document.createElement('a');
+        a.download = 'banner.png';
+        a.href = preview.toDataURL('image/png');
+        a.click();
+      });
+
+      // export SVG (attempt to embed font and bg as dataurls)
+      saveSvgBtn.addEventListener('click', async ()=>{
+        try{
+          const svg = await buildSVG();
+          const blob = new Blob([svg], {type:'image/svg+xml;charset=utf-8'});
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a'); a.href = url; a.download = 'banner.svg'; a.click();
+          setTimeout(()=>URL.revokeObjectURL(url), 30000);
+        }catch(e){ alert('Eroare la export SVG: '+e.message) }
+      });
+
+      
+	  
+	  
+	  
+	  
+	  
+	        async function buildSVG(){
+        const w = state.width, h = state.height;
+
+        // încarcă fontul ca obiect opentype
+        let font;
+        try {
+          const resp = await fetch(state.fontUrl);
+          const ab = await resp.arrayBuffer();
+          font = opentype.parse(ab);
+        } catch (e) {
+          alert("Nu am putut încărca fontul pentru conversie în path!");
+          throw e;
+        }
+
+        // background
+        let bgImageTag = '';
+        if (state.bgDataURL) {
+          const img = await new Promise((res, rej) => {
+            const im = new Image();
+            im.onload = () => res(im);
+            im.onerror = rej;
+            im.src = state.bgDataURL;
+          });
+          const scale = state.bgScalePercent / 100;
+          const dw = img.width * scale;
+          const dh = img.height * scale;
+          const x = state.bgPos.x * w - dw / 2;
+          const y = state.bgPos.y * h - dh / 2;
+          bgImageTag = `<image href="${state.bgDataURL}" x="${x}" y="${y}" width="${dw}" height="${dh}" preserveAspectRatio="none"/>`;
+        }
+
+        // text -> path-uri
+        const fontSize = state.fontSize;
+        const lineHeight = fontSize * 1.05;
+        const centerX = w / 2;
+        const centerY = h / 2 + state.textOffsetY;
+        const lines = state.text.split("\n");
+        const startY = centerY - (lines.length - 1) / 2 * lineHeight;
+
+        let pathsSVG = "";
+        lines.forEach((line, i) => {
+          const y = startY + i * lineHeight;
+          const x = centerX;
+          // opentype.js: generăm path pentru text
+          const path = font.getPath(line, x, y, fontSize, {align: "center", baseline: "middle"});
+          pathsSVG += `<path d="${path.toPathData()}" fill="${state.color}" />\n`;
+        });
+
+        // final svg
+        const svg = `<?xml version="1.0" encoding="utf-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+  ${bgImageTag}
+  ${pathsSVG}
+</svg>`;
+        return svg;
+      }
+
+	  
+	  
+	  
+	  
+	  
+	  
+	  
+	  
+	  
+	  
+	  
+	  
+	  
+	  
+	  
+	  
+	  
+	  
+	  
+	  
+
+      function escapeXml(unsafe) { return unsafe.replace(/[&<>\"']/g, function (c) { switch (c) { case '&': return '&amp;'; case '<': return '&lt;'; case '>': return '&gt;'; case '"': return '&quot;'; case "'": return '&apos;'; } }); }
+
+      // stage size update
+      function updateStageSize(){
+        stageContainer.style.width = (Math.min(window.innerWidth - 420, state.width/2)) + 'px';
+        stageContainer.style.height = (Math.min(window.innerHeight - 40, state.height/2)) + 'px';
+        // set preview element CSS to show scaled canvas
+        const scale = Math.min((stageContainer.clientWidth)/state.width, (stageContainer.clientHeight)/state.height);
+        preview.style.width = (state.width*scale) + 'px';
+        preview.style.height = (state.height*scale) + 'px';
+      }
+
+      // initial draw
+      updateStageSize(); drawPreview();
+
+      // responsive
+      window.addEventListener('resize', updateStageSize);
+
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/opentype.js@latest/dist/opentype.min.js"></script>
+  <script src="opentype.min.js"></script>
+</head>
+<body>
+  <div class="sidebar">
+    <h3>Generator Bannere</h3>
+    <label>Text</label>
+    <textarea id="text">Text de test</textarea>
+
+    <div class="row">
+      <div>
+        <label>Font</label>
+        <select id="font"></select>
+      </div>
+      <div>
+        <label>Mărime font (px)</label>
+        <input id="fontSize" type="number" min="4" max="2000" value="160" />
+      </div>
+    </div>
+
+    <label>Culoare text</label>
+    <input id="color" type="color" value="#111111" />
+
+    <div style="display:flex; gap:8px; margin-top:8px;">
+      <button id="moveUp" class="small">Sus</button>
+      <button id="moveDown" class="small">Jos</button>
+    </div>
+
+    <label>Dimensiune banner</label>
+    <div class="row">
+      <input id="width" type="number" min="1" value="1920" />
+      <input id="height" type="number" min="1" value="1080" />
+    </div>
+
+    <label>Fundal (jpg/png/svg). Dacă nu se încarcă, rămâne transparent.</label>
+    <input id="bgFile" type="file" accept="image/jpeg,image/png,image/svg+xml" />
+
+    <label>Scalare fundal (%)</label>
+    <input id="bgScale" type="range" min="1" max="500" value="100" />
+
+    <label>Poziție fundal (X%, Y%)</label>
+    <div class="row">
+      <input id="bgPosX" type="number" min="0" max="100" value="50" />
+      <input id="bgPosY" type="number" min="0" max="100" value="50" />
+    </div>
+
+    <label>Mută fundal</label>
+    <div style="display:flex; gap:6px; margin-top:6px;">
+      <button id="bgLeft" class="small">◀</button>
+      <button id="bgRight" class="small">▶</button>
+      <button id="bgUp" class="small">▲</button>
+      <button id="bgDown" class="small">▼</button>
+    </div>
+
+    <hr />
+    <div style="display:flex; gap:8px;">
+      <button id="savePng" class="btn-primary">Salvează PNG</button>
+      <button id="saveSvg" class="btn-ghost">Salvează SVG</button>
+    </div>
+
+    <h4>Rețetă (export / import)</h4>
+    <textarea id="recipe" placeholder='Aici apare JSON-ul cu parametrii'></textarea>
+    <div style="display:flex; gap:8px;">
+      <button id="exportRecipe" class="small">Generează rețetă</button>
+      <button id="applyRecipe" class="small">Aplică rețetă</button>
+    </div>
+
+    <footer>
+      Toate setările (font, culoare, poziție, fundal) rămân independente. Puteți modifica orice fără a reseta celelalte.
+    </footer>
+  </div>
+
+  <div class="canvas-wrap">
+    <div id="stageContainer" class="stage checker" style="display:flex; align-items:center; justify-content:center; padding:8px">
+      <canvas id="preview" class="stage" style="display:block; border:1px solid #d1d5db;"></canvas>
+    </div>
+  </div>
+
+</body>
+</html>
