@@ -278,62 +278,66 @@
 	  
 	  
 	  
-	        async function buildSVG(){
-        const w = state.width, h = state.height;
+async function buildSVG(){
+  const w = state.width, h = state.height;
 
-        // încarcă fontul ca obiect opentype
-        let font;
-        try {
-          const resp = await fetch(state.fontUrl);
-          const ab = await resp.arrayBuffer();
-          font = opentype.parse(ab);
-        } catch (e) {
-          alert("Nu am putut încărca fontul pentru conversie în path!");
-          throw e;
-        }
+  // încarcă fontul ca obiect opentype
+  let font;
+  try {
+    const resp = await fetch(state.fontUrl);
+    const ab = await resp.arrayBuffer();
+    font = opentype.parse(ab);
+  } catch (e) {
+    alert("Nu am putut încărca fontul pentru conversie în path!");
+    throw e;
+  }
 
-        // background
-        let bgImageTag = '';
-        if (state.bgDataURL) {
-          const img = await new Promise((res, rej) => {
-            const im = new Image();
-            im.onload = () => res(im);
-            im.onerror = rej;
-            im.src = state.bgDataURL;
-          });
-          const scale = state.bgScalePercent / 100;
-          const dw = img.width * scale;
-          const dh = img.height * scale;
-          const x = state.bgPos.x * w - dw / 2;
-          const y = state.bgPos.y * h - dh / 2;
-          bgImageTag = `<image href="${state.bgDataURL}" x="${x}" y="${y}" width="${dw}" height="${dh}" preserveAspectRatio="none"/>`;
-        }
+  // background
+  let bgImageTag = '';
+  if (state.bgDataURL) {
+    const img = await new Promise((res, rej) => {
+      const im = new Image();
+      im.onload = () => res(im);
+      im.onerror = rej;
+      im.src = state.bgDataURL;
+    });
+    const scale = state.bgScalePercent / 100;
+    const dw = img.width * scale;
+    const dh = img.height * scale;
+    const x = state.bgPos.x * w - dw / 2;
+    const y = state.bgPos.y * h - dh / 2;
+    bgImageTag = `<image href="${state.bgDataURL}" x="${x}" y="${y}" width="${dw}" height="${dh}" preserveAspectRatio="none"/>`;
+  }
 
-        // text -> path-uri
-        const fontSize = state.fontSize;
-        const lineHeight = fontSize * 1.05;
-        const centerX = w / 2;
-        const centerY = h / 2 + state.textOffsetY;
-        const lines = state.text.split("\n");
-        const startY = centerY - (lines.length - 1) / 2 * lineHeight;
+  // text -> path-uri
+  const fontSize = state.fontSize;
+  const lineHeight = fontSize * 1.05;
+  const centerX = w / 2;
+  const centerY = h / 2 + state.textOffsetY;
+  const lines = state.text.split("\n");
+  const startY = centerY - (lines.length - 1) / 2 * lineHeight;
 
-        let pathsSVG = "";
-        lines.forEach((line, i) => {
-          const y = startY + i * lineHeight;
-          const x = centerX;
-          // opentype.js: generăm path pentru text
-          const path = font.getPath(line, x, y, fontSize, {align: "center", baseline: "middle"});
-          pathsSVG += `<path d="${path.toPathData()}" fill="${state.color}" />\n`;
-        });
+  let pathsSVG = "";
+  lines.forEach((line, i) => {
+    const y = startY + i * lineHeight;
 
-        // final svg
-        const svg = `<?xml version="1.0" encoding="utf-8"?>
+    // măsurăm lățimea textului
+    const textWidth = font.getAdvanceWidth(line, fontSize);
+    const x = centerX - textWidth / 2; // centrare pe orizontală
+
+    // generăm path
+    const path = font.getPath(line, x, y, fontSize);
+    pathsSVG += `<path d="${path.toPathData()}" fill="${state.color}" />\n`;
+  });
+
+  // final svg
+  const svg = `<?xml version="1.0" encoding="utf-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
   ${bgImageTag}
   ${pathsSVG}
 </svg>`;
-        return svg;
-      }
+  return svg;
+}
 
 	  
 	  
