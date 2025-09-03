@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Background din Expresii Aleatorii</title>
+  <style>
+    body {
+      font-family: Calibri, sans-serif;
+      margin: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+    .control-item {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    textarea, input, button, label {
+      padding: 8px;
+      font-size: 14px;
+      margin-top: 4px;
+      font-family: Calibri, sans-serif;
+    }
+    #canvas {
+      border: 1px solid #ccc;
+      max-width: 100%;
+      height: auto;
+    }
+  </style>
+</head>
+<body>
+  <h2>Generator Background din Expresii Aleatorii</h2>
+  <div class="controls">
+
+    <div class="control-item">
+      <label for="expressions">Expresii (fiecare pe un rând)</label>
+      <textarea id="expressions" rows="6" cols="40" title="Câmp pentru expresii"></textarea>
+    </div>
+
+    <div class="control-item">
+      <label for="canvasWidth">Lățime imagine (px)</label>
+      <input type="number" id="canvasWidth" value="1920" onchange="resizeCanvas()" title="Setează lățimea imaginii în pixeli">
+    </div>
+
+    <div class="control-item">
+      <label for="canvasHeight">Înălțime imagine (px)</label>
+      <input type="number" id="canvasHeight" value="1080" onchange="resizeCanvas()" title="Setează înălțimea imaginii în pixeli">
+    </div>
+
+    <div class="control-item">
+      <label for="rows">Număr rânduri</label>
+      <input type="number" id="rows" value="10" onchange="generateBackground()" title="Numărul de rânduri afișate">
+    </div>
+
+    <div class="control-item">
+      <label for="lineSpacing">Distanța dintre rânduri</label>
+      <input type="number" id="lineSpacing" value="5" onchange="redrawLines()" title="Distanța verticală între rânduri">
+    </div>
+
+    <div class="control-item">
+      <label for="fontSize">Dimensiune text (px)</label>
+      <input type="number" id="fontSize" value="24" onchange="redrawLines()" title="Dimensiunea caracterelor în pixeli">
+    </div>
+
+    <div class="control-item">
+      <label for="opacity">Opacitate (0-1)</label>
+      <input type="number" id="opacity" step="0.1" value="0.5" onchange="redrawLines()" title="Opacitatea textului">
+    </div>
+
+    <div class="control-item">
+      <label for="color">Culoare text</label>
+      <input type="color" id="color" value="#000000" onchange="redrawLines()" title="Culoarea textului">
+    </div>
+
+    <div class="control-item">
+      <label for="bulletColor">Culoare simbol „•"</label>
+      <input type="color" id="bulletColor" value="#ff0000" onchange="redrawLines()" title="Culoarea simbolului bullet">
+    </div>
+
+    <div class="control-item">
+      <label for="lineNumber">Rând de mutat</label>
+      <input type="number" id="lineNumber" min="1" title="Selectează rândul pe care îl muți">
+      <div style="margin-top:4px;">
+        <button onclick="moveLine(-20)" title="Mută rândul selectat la stânga">⬅️ Stânga</button>
+        <button onclick="moveLine(20)" title="Mută rândul selectat la dreapta">➡️ Dreapta</button>
+      </div>
+    </div>
+
+    <div class="control-item">
+      <button onclick="generateBackground()" title="Generează background cu expresiile introduse">Generează</button>
+      <button onclick="saveImage()" title="Salvează imaginea generată ca PNG">Salvează PNG</button>
+      <button onclick="saveImageLarge()" title="Salvează imagine mare (ex. pentru print)">Salvează PNG mare</button>
+      <button onclick="saveImageSVG()" title="Salvează imagine vectorială (SVG)">Salvează SVG</button>
+      <button onclick="saveRecipe()" title="Salvează rețeta setărilor curente">Show Recipe</button>
+      <button onclick="loadRecipe()" title="Încarcă o rețetă salvată">Load Recipe</button>
+    </div>
+
+  </div>
+
+  <textarea id="recipeField" rows="6" cols="80" placeholder="Aici apare codul rețetei sau inserează unul pentru a-l încărca"></textarea>
+
+  <canvas id="canvas" width="1920" height="1080" title="Canvas pentru background"></canvas>
+
+  <script>
+    let lines = [];
+
+    function shuffleArray(arrayToShuffle) {
+      return arrayToShuffle.map(a => [Math.random(), a]).sort((a,b) => a[0]-b[0]).map(a => a[1]);
+    }
+
+    function resizeCanvas() {
+      const canvas = document.getElementById('canvas');
+      canvas.width = parseInt(document.getElementById('canvasWidth').value);
+      canvas.height = parseInt(document.getElementById('canvasHeight').value);
+      redrawLines();
+    }
+
+    function generateBackground() {
+      const canvas = document.getElementById('canvas');
+      const ctx = canvas.getContext('2d');
+      const expressions = document.getElementById('expressions').value.trim().split(/\n+/);
+      const rowsCount = parseInt(document.getElementById('rows').value);
+      const fontSize = parseInt(document.getElementById('fontSize').value);
+      const lineSpacing = parseInt(document.getElementById('lineSpacing').value);
+
+      ctx.font = `${fontSize}px Calibri`;
+
+      lines = [];
+      const totalHeight = rowsCount * (fontSize + lineSpacing);
+      let startY = (canvas.height - totalHeight) / 2 + fontSize;
+
+      for(let i=0; i<rowsCount; i++) {
+        const shuffledExpressions = shuffleArray(expressions);
+        const lineText = shuffledExpressions.join(' • ');
+        lines.push({ text: lineText, y: startY, x: 0 });
+        startY += fontSize + lineSpacing;
+      }
+      drawLines();
+    }
+
+    function redrawLines(customCtx, customCanvas) {
+      const canvas = customCanvas || document.getElementById('canvas');
+      const ctx = customCtx || canvas.getContext('2d');
+      const fontSize = parseInt(document.getElementById('fontSize').value);
+      const lineSpacing = parseInt(document.getElementById('lineSpacing').value);
+      const opacity = parseFloat(document.getElementById('opacity').value);
+      const textColor = document.getElementById('color').value;
+      const bulletColor = document.getElementById('bulletColor').value;
+      ctx.font = `${fontSize}px Calibri`;
+      ctx.globalAlpha = opacity;
+
+      const totalHeight = lines.length * (fontSize + lineSpacing);
+      let startY = (canvas.height - totalHeight) / 2 + fontSize;
+
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+
+      lines.forEach((line, index) => {
+        line.y = startY;
+        const parts = line.text.split(' • ');
+        let textWidth = ctx.measureText(line.text).width;
+        let xCenter = (canvas.width - textWidth) / 2;
+        let xPos = xCenter + (line.x || 0);
+        parts.forEach((part,i) => {
+          ctx.fillStyle = textColor;
+          ctx.fillText(part, xPos, line.y);
+          const partWidth = ctx.measureText(part).width;
+          xPos += partWidth;
+          if(i < parts.length - 1) {
+            ctx.fillStyle = bulletColor;
+            ctx.fillText(' • ', xPos, line.y);
+            xPos += ctx.measureText(' • ').width;
+          }
+        });
+        startY += fontSize + lineSpacing;
+      });
+    }
+
+    function drawLines() {
+      redrawLines();
+    }
+
+    function moveLine(direction) {
+      const lineIndex = parseInt(document.getElementById('lineNumber').value)-1;
+      if(lineIndex >=0 && lineIndex < lines.length) {
+        lines[lineIndex].x = (lines[lineIndex].x || 0) + direction;
+        redrawLines();
+      }
+    }
+
+    function saveImage() {
+      const canvas = document.getElementById('canvas');
+      const link = document.createElement('a');
+      link.download = 'background.png';
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    }
+
+    function saveImageLarge() {
+      const width = parseInt(document.getElementById('canvasWidth').value);
+      const height = parseInt(document.getElementById('canvasHeight').value);
+      const largeCanvas = document.createElement('canvas');
+      largeCanvas.width = width;
+      largeCanvas.height = height;
+      const ctx = largeCanvas.getContext('2d');
+      redrawLines(ctx, largeCanvas);
+      largeCanvas.toBlob(function(blob) {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'background_large.png';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }, 'image/png');
+    }
+
+    function saveImageSVG() {
+      const width = parseInt(document.getElementById('canvasWidth').value);
+      const height = parseInt(document.getElementById('canvasHeight').value);
+      const fontSize = parseInt(document.getElementById('fontSize').value);
+      const lineSpacing = parseInt(document.getElementById('lineSpacing').value);
+      const opacity = parseFloat(document.getElementById('opacity').value);
+      const textColor = document.getElementById('color').value;
+      const bulletColor = document.getElementById('bulletColor').value;
+
+      let svgContent = `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`;
+
+      const totalHeight = lines.length * (fontSize + lineSpacing);
+      let startY = (height - totalHeight) / 2 + fontSize;
+
+      lines.forEach(line => {
+        let xCenter = width/2;
+        let textElement = `<text x="${xCenter}" y="${startY}" font-family="Calibri" font-size="${fontSize}" fill="${textColor}" fill-opacity="${opacity}" text-anchor="middle">`;
+        let parts = line.text.split(' • ');
+        parts.forEach((part,i) => {
+          textElement += part;
+          if(i < parts.length-1) {
+            textElement += ` <tspan fill="${bulletColor}">•</tspan> `;
+          }
+        });
+        textElement += `</text>`;
+        svgContent += textElement;
+        startY += fontSize + lineSpacing;
+      });
+
+      svgContent += '</svg>';
+
+      const blob = new Blob([svgContent], {type: 'image/svg+xml'});
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'background.svg';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
+
+    // --- Funcționalitate pentru Rețete ---
+    function saveRecipe() {
+      const recipe = {
+        expressions: document.getElementById('expressions').value,
+        canvasWidth: document.getElementById('canvasWidth').value,
+        canvasHeight: document.getElementById('canvasHeight').value,
+        rows: document.getElementById('rows').value,
+        lineSpacing: document.getElementById('lineSpacing').value,
+        fontSize: document.getElementById('fontSize').value,
+        opacity: document.getElementById('opacity').value,
+        color: document.getElementById('color').value,
+        bulletColor: document.getElementById('bulletColor').value,
+        lines: lines
+      };
+      document.getElementById('recipeField').value = JSON.stringify(recipe, null, 2);
+    }
+
+    function loadRecipe() {
+      try {
+        const recipe = JSON.parse(document.getElementById('recipeField').value);
+        document.getElementById('expressions').value = recipe.expressions;
+        document.getElementById('canvasWidth').value = recipe.canvasWidth;
+        document.getElementById('canvasHeight').value = recipe.canvasHeight;
+        document.getElementById('rows').value = recipe.rows;
+        document.getElementById('lineSpacing').value = recipe.lineSpacing;
+        document.getElementById('fontSize').value = recipe.fontSize;
+        document.getElementById('opacity').value = recipe.opacity;
+        document.getElementById('color').value = recipe.color;
+        document.getElementById('bulletColor').value = recipe.bulletColor;
+        lines = recipe.lines;
+        resizeCanvas();
+        redrawLines();
+      } catch(e) {
+        alert('Rețeta introdusă nu este validă!');
+      }
+    }
+  </script>
+</body>
+</html>
