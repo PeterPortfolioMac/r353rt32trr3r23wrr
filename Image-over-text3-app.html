@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Inserare imagine în PDF — Text3</title>
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--accent:#06b6d4;--muted:#94a3b8}
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,'Helvetica Neue',Arial;background:linear-gradient(180deg,#071023 0%, #091226 100%);color:#e6eef6}
+    .app{max-width:1100px;margin:28px auto;padding:20px;display:grid;grid-template-columns:360px 1fr;gap:20px}
+    .panel{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));padding:18px;border-radius:12px;box-shadow:0 6px 18px rgba(2,6,23,.6)}
+    h1{font-size:18px;margin:0 0 12px}
+    label{display:block;font-size:13px;color:var(--muted);margin-top:8px}
+    input[type=file]{width:100%}
+    .btn{display:inline-block;margin-top:12px;padding:8px 12px;border-radius:8px;background:var(--accent);color:#042;cursor:pointer;border:none}
+    .preview{position:relative;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,.04);min-height:600px}
+    canvas#pdfCanvas{width:100%;height:auto;display:block}
+    .overlay{position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none}
+    .rect{position:absolute;border:3px dashed rgba(6,182,212,.85);background:rgba(6,182,212,.06);pointer-events:auto;cursor:move}
+    .controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+    .note{font-size:13px;color:var(--muted);margin-top:10px}
+    @media(max-width:880px){.app{grid-template-columns:1fr;padding:12px}}
+  </style>
+</head>
+<body>
+<div class="app">
+  <div class="panel">
+    <h1>Inserare imagine în PDF (câmp „Text3”)</h1>
+    <label>Încarcă PDF</label>
+    <input id="pdfFile" type="file" accept="application/pdf">
+    <label>Încarcă imagine (PNG/JPG)</label>
+    <input id="imgFile" type="file" accept="image/*">
+    <div class="controls">
+      <button id="autodetect" class="btn">Detectează Text3</button>
+      <button id="fitImage" class="btn">Potriveşte imaginea</button>
+      <button id="downloadBtn" class="btn">Descarcă PDF</button>
+    </div>
+    <div class="note">Flux: încarcă PDF → încarcă imagine → click <b>Detectează Text3</b> → ajustează dreptunghiul dacă e nevoie → <b>Descarcă PDF</b>.</div>
+  </div>
+
+  <div class="panel">
+    <div class="preview">
+      <canvas id="pdfCanvas"></canvas>
+      <div id="overlay" class="overlay"></div>
+    </div>
+  </div>
+</div>
+
+<!-- pdf.js -->
+<script src="https://unpkg.com/pdfjs-dist@3.7.107/build/pdf.min.js"></script>
+<!-- pdf-lib -->
+<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<script>
+(async function(){
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@3.7.107/build/pdf.worker.min.js';
+  const pdfInput = document.getElementById('pdfFile');
+  const imgInput = document.getElementById('imgFile');
+  const canvas = document.getElementById('pdfCanvas');
+  const overlay = document.getElementById('overlay');
+  const autodetectBtn = document.getElementById('autodetect');
+  const fitBtn = document.getElementById('fitImage');
+  const downloadBtn = document.getElementById('downloadBtn');
+
+  let pdfBytes = null, pdfDocJS = null, pageViewport = null, pageNumber = 1, pageRenderScale = 1.5;
+  let imageDataURL = null;
+  let rectEl = null; // selection rectangle DOM
+  let rect = {x:50,y:120,w:400,h:240}; // in viewport pixels
+
+  pdfInput.addEventListener('change', async(e)=>{
+    const f = e.target.files[0]; if(!f) return;
+    pdfBytes = await f.arrayBuffer();
+    await renderPdf();
+  });
+  imgInput.addEventListener('change', async(e)=>{
+    const f = e.target.files[0]; if(!f) return;
+    imageDataURL = await readFileAsDataURL(f);
+    if(rectEl) showImagePreviewInRect();
+  });
+
+  autodetectBtn.addEventListener('click', async()=>{
+    if(!pdfBytes) return alert('Încarcă mai întâi PDF-ul.');
+    await detectText3AndPlace();
+  });
+
+  fitBtn.addEventListener('click', ()=>{
+    if(!imageDataURL) return alert('Încarcă mai întâi imaginea.');
+    fitImageIntoRectKeepingAspect();
+  });
+
+  downloadBtn.addEventListener('click', async()=>{
+    if(!pdfBytes) return alert('PDF lipsă');
+    if(!imageDataURL) return alert('Imagine lipsă');
+    await embedImageAndDownload();
+  });
+
+  async function renderPdf(){
+    // render first page to canvas for preview
+    const loadingTask = pdfjsLib.getDocument({data:pdfBytes});
+    pdfDocJS = await loadingTask.promise;
+    const page = await pdfDocJS.getPage(pageNumber);
+    pageViewport = page.getViewport({scale: pageRenderScale});
+    canvas.width = pageViewport.width; canvas.height = pageViewport.height;
+    const ctx = canvas.getContext('2d');
+    const renderContext = {canvasContext: ctx, viewport: pageViewport};
+    await page.render(renderContext).promise;
+    // clear overlay and add rect
+    overlay.innerHTML = '';
+    createOrUpdateRectDOM();
+  }
+
+  function createOrUpdateRectDOM(){
+    if(!rectEl){
+      rectEl = document.createElement('div');
+      rectEl.className = 'rect';
+      rectEl.style.left = rect.x + 'px';
+      rectEl.style.top = rect.y + 'px';
+      rectEl.style.width = rect.w + 'px';
+      rectEl.style.height = rect.h + 'px';
+      overlay.appendChild(rectEl);
+      makeDraggableResizable(rectEl);
+    } else {
+      rectEl.style.left = rect.x + 'px';
+      rectEl.style.top = rect.y + 'px';
+      rectEl.style.width = rect.w + 'px';
+      rectEl.style.height = rect.h + 'px';
+    }
+    if(imageDataURL) showImagePreviewInRect();
+  }
+
+  function showImagePreviewInRect(){
+    if(!rectEl) return;
+    rectEl.style.backgroundImage = `url(${imageDataURL})`;
+    rectEl.style.backgroundSize = 'cover';
+    rectEl.style.backgroundPosition = 'center';
+  }
+
+  function makeDraggableResizable(el){
+    el.style.touchAction = 'none';
+    let isDown=false, startX, startY, startLeft, startTop;
+    el.addEventListener('pointerdown',(ev)=>{
+      isDown=true; el.setPointerCapture(ev.pointerId);
+      startX=ev.clientX; startY=ev.clientY;
+      startLeft = parseFloat(el.style.left); startTop = parseFloat(el.style.top);
+    });
+    window.addEventListener('pointermove',(ev)=>{
+      if(!isDown) return;
+      const dx=ev.clientX-startX, dy=ev.clientY-startY;
+      rect.x = Math.max(0, Math.min(canvas.width-10, startLeft+dx));
+      rect.y = Math.max(0, Math.min(canvas.height-10, startTop+dy));
+      el.style.left = rect.x+'px'; el.style.top = rect.y+'px';
+    });
+    window.addEventListener('pointerup',(ev)=>{if(isDown){isDown=false; el.releasePointerCapture(ev.pointerId);}});
+    // simple corner resizer
+    const handle = document.createElement('div');
+    handle.style.position='absolute'; handle.style.width='18px'; handle.style.height='18px';
+    handle.style.right='-8px'; handle.style.bottom='-8px'; handle.style.cursor='se-resize';
+    handle.style.background='rgba(0,0,0,0.2)'; handle.style.borderRadius='4px';
+    el.appendChild(handle);
+    let resizing=false, rsStartW, rsStartH, rsStartX, rsStartY;
+    handle.addEventListener('pointerdown',(ev)=>{resizing=true; handle.setPointerCapture(ev.pointerId); rsStartW=rect.w; rsStartH=rect.h; rsStartX=ev.clientX; rsStartY=ev.clientY; ev.stopPropagation();});
+    window.addEventListener('pointermove',(ev)=>{ if(!resizing) return; const dx=ev.clientX-rsStartX, dy=ev.clientY-rsStartY; rect.w = Math.max(30, Math.min(canvas.width-rect.x, rsStartW+dx)); rect.h = Math.max(30, Math.min(canvas.height-rect.y, rsStartH+dy)); el.style.width = rect.w+'px'; el.style.height = rect.h+'px'; });
+    window.addEventListener('pointerup',(ev)=>{ if(resizing){resizing=false; try{handle.releasePointerCapture(ev.pointerId)}catch(e){} }});
+  }
+
+  async function detectText3AndPlace(){
+    // use PDF.js to locate text items
+    const page = await pdfDocJS.getPage(pageNumber);
+    const textContent = await page.getTextContent();
+    // find item containing Text3
+    const items = textContent.items;
+    const matches = items.filter(it=> (it.str || '').toLowerCase().includes('text3'));
+    if(matches.length===0){
+      alert('Nu am găsit "Text3" pe pagină. Poți plasa manual dreptunghiul.');
+      return;
+    }
+    // pick first match and compute viewport coordinates
+    const item = matches[0];
+    // transform for an item: transform matrix [a b c d e f] where e,f are x,y in text space
+    const tm = item.transform;
+    // text baseline y
+    const textY = tm[5];
+    const textX = tm[4];
+    // find next item below (smaller y)
+    const lower = items.filter(it=> (it.transform[5] < textY - 2));
+    let nextY = 20; // default bottom padding
+    if(lower.length) nextY = Math.max(...lower.map(it=>it.transform[5]));
+    // compute viewport positions
+    const viewport = page.getViewport({scale:pageRenderScale});
+    // PDF text positions are in PDF points. We'll convert by using getViewport({scale:1}) to get scale ratio
+    const vpAt1 = page.getViewport({scale:1});
+    const ratio = viewport.height / vpAt1.height; // ratio equals pageRenderScale
+    // compute y positions in viewport px
+    const yTextViewport = vpAt1.height - textY; // convert bottom-left -> top-left
+    const yNextViewport = vpAt1.height - nextY;
+
+    // scale to rendered viewport
+    const yText = yTextViewport * ratio;
+    const yNext = yNextViewport * ratio;
+    // create rect between yText and yNext with some padding
+    const top = Math.min(yText, yNext) + 12;
+    const bottom = Math.max(yText, yNext) - 12;
+    const height = Math.max(80, bottom - top);
+    const width = Math.min(canvas.width - 40, canvas.width * 0.8);
+    rect = {x: (canvas.width - width)/2, y: top, w: width, h: height};
+    createOrUpdateRectDOM();
+  }
+
+  function readFileAsDataURL(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(file); }); }
+
+  function fitImageIntoRectKeepingAspect(){
+    // This just updates background-size to contain so image keeps ratio and not cropped
+    if(!rectEl) return;
+    rectEl.style.backgroundSize = 'contain';
+    rectEl.style.backgroundRepeat = 'no-repeat';
+    rectEl.style.backgroundPosition = 'center';
+  }
+
+  async function embedImageAndDownload() {
+  const { PDFDocument } = PDFLib;
+  const pdfDoc = await PDFDocument.load(pdfBytes);
+  const page = pdfDoc.getPage(pageNumber - 1);
+  const { width: pdfWidth, height: pdfHeight } = page.getSize();
+
+  // raport între canvas și PDF
+  const sx = pdfWidth / canvas.width;
+  const sy = pdfHeight / canvas.height;
+
+  // coordonate corecte în PDF (origine jos-stânga)
+  const x_pdf = rect.x * sx;
+  const y_pdf = (canvas.height - rect.y - rect.h) * sy;
+  const w_pdf = rect.w * sx;
+  const h_pdf = rect.h * sy;
+
+  // convertim dataURL -> bytes (fără fetch)
+  function dataURLtoUint8Array(dataURL) {
+    const base64 = dataURL.split(',')[1];
+    const binary = atob(base64);
+    const len = binary.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  }
+
+  const imgBytes = dataURLtoUint8Array(imageDataURL);
+  const isPng = imageDataURL.startsWith('data:image/png');
+  const embedImg = isPng
+    ? await pdfDoc.embedPng(imgBytes)
+    : await pdfDoc.embedJpg(imgBytes);
+
+  // păstrăm proporțiile imaginii
+  const imgDims = embedImg.scale(1);
+  const scale = Math.min(w_pdf / imgDims.width, h_pdf / imgDims.height);
+  const drawW = imgDims.width * scale;
+  const drawH = imgDims.height * scale;
+  const offsetX = x_pdf + (w_pdf - drawW) / 2;
+  const offsetY = y_pdf + (h_pdf - drawH) / 2;
+
+  page.drawImage(embedImg, {
+    x: offsetX,
+    y: offsetY,
+    width: drawW,
+    height: drawH
+  });
+
+    // generăm și descărcăm PDF-ul final
+  const out = await pdfDoc.save();
+  const blob = new Blob([out], { type: 'application/pdf' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'document-completat.pdf';
+  document.body.appendChild(a); // ✅ necesar pentru unele browsere
+  a.click();
+  document.body.removeChild(a); // ✅ curățăm elementul
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+}
+
+
+})();
+</script>
+</body>
+</html>
