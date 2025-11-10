@@ -3,114 +3,309 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Uploader imagine + PDF → Text3</title>
+  <title>Uploader: imagine + PDF → Text3</title>
   <style>
     :root{
       --bg:#0f1724; --card:#0b1220; --muted:#94a3b8; --accent:#7c3aed;
+      --glass: rgba(255,255,255,0.04);
+      --radius:12px;
     }
     *{box-sizing:border-box}
     body{margin:0;font-family:Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;color:#e6eef8;background:linear-gradient(180deg,#071124 0%, #081827 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
-    .app{width:100%;max-width:1000px;background:rgba(255,255,255,0.03);border-radius:18px;padding:20px;display:grid;grid-template-columns:1fr;gap:18px;box-shadow:0 10px 30px rgba(2,6,23,0.6)}
-    .panel{background:var(--card);padding:14px;border-radius:12px;color:var(--muted)}
+    .app{width:100%;max-width:1200px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:18px;padding:20px;display:grid;grid-template-columns:350px 1fr 360px;gap:18px;box-shadow:0 10px 30px rgba(2,6,23,0.6)}
+
+    /* Left: upload panel */
+    .panel{background:var(--card);padding:14px;border-radius:12px;color:var(--muted);min-height:320px}
     h2{margin:0 0 12px 0;color:#e6eef8;font-size:16px}
-    .file-input{margin-bottom:16px}
-    .btn{background:var(--accent);color:white;padding:10px 16px;border-radius:8px;border:none;cursor:pointer;margin-right:8px}
-    .btn:disabled{opacity:0.5;cursor:not-allowed}
-    .layout{margin-top:20px;padding:20px;background:rgba(255,255,255,0.02);border-radius:12px;text-align:center;position:relative;overflow:hidden;min-height:300px}
-    .layout h3{margin:0 0 8px 0;color:#fff}
-    .layout p{margin:0;color:var(--muted)}
-    .bgimg{position:absolute;inset:0;z-index:1;background-position:center;background-repeat:no-repeat;background-size:cover;transition:background 0.3s}
-    .layout::after{content:"";position:absolute;inset:0;background:linear-gradient(0deg, rgba(2,6,23,0.48), rgba(2,6,23,0.12));z-index:1}
-    .layout .content{position:relative;z-index:2}
-    #pdf-canvas{width:100%;border-radius:8px;background:#071427;margin-top:12px}
+    .drop{border:2px dashed rgba(255,255,255,0.06);padding:16px;border-radius:10px;text-align:center;background:linear-gradient(180deg, rgba(255,255,255,0.01), transparent);cursor:pointer}
+    .drop.dragover{border-color:rgba(124,58,237,0.6);box-shadow:0 6px 24px rgba(124,58,237,0.06);}
+    .small{font-size:13px;color:var(--muted);margin-top:10px}
+    .files-list{margin-top:12px;display:flex;flex-direction:column;gap:8px}
+    .file-item{display:flex;align-items:center;justify-content:space-between;padding:8px;border-radius:8px;background:var(--glass);font-size:13px}
+    .btn{background:var(--accent);color:white;padding:8px 12px;border-radius:8px;border:none;cursor:pointer}
+
+    /* Center: preview card */
+    .preview-wrap{display:flex;align-items:center;justify-content:center}
+    .card{width:100%;max-width:780px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));padding:18px;border-radius:16px;border:1px solid rgba(255,255,255,0.02);color:#e6eef8}
+    .card .row{display:flex;gap:12px;align-items:center}
+    .card h3{margin:0 0 6px 0}
+    .meta{font-size:13px;color:var(--muted)}
+
+    /* The layout with Text3 in the middle */
+    .layout{display:grid;grid-template-rows:auto 1fr auto;gap:12px;padding:12px;border-radius:12px;background:linear-gradient(180deg, rgba(255,255,255,0.01), transparent);min-height:360px}
+    .header, .footer{padding:8px}
+    .header .title{font-weight:700}
+
+    /* Text3 area: this is where image will be placed as background, behind text */
+    .text3{position:relative;display:flex;align-items:center;justify-content:center;padding:18px;border-radius:10px;overflow:hidden;min-height:220px;background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.01));border:1px dashed rgba(255,255,255,0.03)}
+    .text3 .content{position:relative;z-index:2;text-align:center;padding:8px}
+    .text3 .content h4{margin:0;font-size:20px}
+    .text3 .content p{margin:6px 0 0 0;color:var(--muted)}
+
+    /* image layer (background) */
+    .text3 .bgimg{position:absolute;inset:0;z-index:1;background-position:center;background-repeat:no-repeat;background-size:cover;transition:transform .25s ease}
+    /* subtle overlay so text remains readable */
+    .text3::after{content:"";position:absolute;inset:0;background:linear-gradient(0deg, rgba(2,6,23,0.48), rgba(2,6,23,0.12));z-index:1;pointer-events:none}
+
+    /* Right: PDF preview */
+    .pdf-panel{background:var(--card);padding:14px;border-radius:12px;color:var(--muted);min-height:320px}
+    #pdf-canvas{width:100%;border-radius:8px;background:#071427}
+
+    /* responsive */
+    @media (max-width:1100px){.app{grid-template-columns:1fr;grid-template-rows:auto auto auto}}
   </style>
 </head>
 <body>
   <div class="app">
     <div class="panel">
-      <h2>Selecție fișiere</h2>
-      <div class="file-input">
-        <label for="imgInput" class="btn">Alege imagine</label>
-        <input id="imgInput" type="file" accept="image/*" style="display:none">
+      <h2>Încarcă fișiere</h2>
+      <div id="imgDrop" class="drop" tabindex="0">
+        Trage și plasează imaginea aici<br><small class="small">(PNG, JPG, WEBP — ideal 1602×677px)</small>
       </div>
-      <div class="file-input">
-        <label for="pdfInput" class="btn">Alege PDF</label>
-        <input id="pdfInput" type="file" accept="application/pdf" style="display:none">
+      <input id="imgInput" type="file" accept="image/*" style="display:none">
+
+      <div style="height:12px"></div>
+
+      <div id="pdfDrop" class="drop" tabindex="0">
+        Trage și plasează PDF-ul aici<br><small class="small">(PDF — se va previzualiza prima pagină)</small>
       </div>
-      <button id="clearBtn" class="btn">Curăță</button>
+      <input id="pdfInput" type="file" accept="application/pdf" style="display:none">
+
+      <div class="files-list" id="filesList"></div>
+      <div style="height:10px"></div>
+      <button class="btn" id="clearBtn">Curăță</button>
     </div>
 
-    <div class="layout" id="text3">
-      <div class="bgimg" id="bgimg" aria-hidden="true"></div>
-      <div class="content">
-        <h3>Text3</h3>
-        <p>Imaginea selectată va fi plasată în spatele textului, fără distorsiune.</p>
+    <div class="preview-wrap">
+      <div class="card">
+        <div class="row">
+          <div>
+            <h3>Card demo</h3>
+            <div class="meta">Un exemplu de layout cu <strong>Text3</strong> în centru — imaginea încărcată va fi plasată în spatele textului, umplând spațiul fără a distorsiona.</div>
+          </div>
+        </div>
+
+        <div class="layout" style="margin-top:12px">
+          <div class="header">
+            <div class="title">Titlu formular</div>
+            <div class="meta">Subtitlu sau instrucțiuni</div>
+          </div>
+
+          <div class="text3" id="text3">
+            <div class="bgimg" id="bgimg" aria-hidden="true"></div>
+            <div class="content">
+              <h4>Text3</h4>
+              <p>Acesta este textul care trebuie să rămână vizibil. Imaginea va fi în spate, scalată proporțional.</p>
+            </div>
+          </div>
+
+          <div class="footer">
+            <div class="meta">Footer / alte elemente</div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:8px;margin-top:12px;align-items:center">
+          <label class="meta">Mod ajustare:</label>
+          <select id="fitMode">
+            <option value="cover">Fill (cover) — umple spațiul, poate tăia marginile</option>
+            <option value="contain">Contain — arată întreaga imagine (posibile margini)</option>
+          </select>
+
+          <label class="meta" style="margin-left:12px">Poziție:</label>
+          <select id="posMode">
+            <option value="center">Center</option>
+            <option value="top">Top</option>
+            <option value="bottom">Bottom</option>
+            <option value="left">Left</option>
+            <option value="right">Right</option>
+          </select>
+
+          <button id="downloadBtn" class="btn" style="margin-left:auto">Descarcă previzualizare (PNG)</button>
+        </div>
       </div>
     </div>
 
-    <canvas id="pdf-canvas"></canvas>
+    <div class="pdf-panel">
+      <h2>Previzualizare PDF</h2>
+      <div class="small">Se afișează prima pagină. Poți trage un PDF în zona din stânga.</div>
+      <canvas id="pdf-canvas"></canvas>
+      <div style="height:12px"></div>
+      <button id="loadPdfBtn" class="btn">Descarcă PDF încărcat</button>
+    </div>
   </div>
 
-  <script>
-    const imgInput = document.getElementById('imgInput');
-    const pdfInput = document.getElementById('pdfInput');
-    const bgimg = document.getElementById('bgimg');
+<script>
+// Simple helper to show files in list
+const filesList = document.getElementById('filesList')
+function showFile(name, type){
+  const el = document.createElement('div'); el.className='file-item';
+  el.innerHTML = `<div>${name}</div><div>${type}</div>`;
+  filesList.prepend(el);
+}
 
-    imgInput.addEventListener('change', ()=>{
-      if(imgInput.files.length){
-        const file = imgInput.files[0];
-        const url = URL.createObjectURL(file);
-        bgimg.style.backgroundImage = `url(${url})`;
-        bgimg.style.backgroundSize = 'cover';
-      }
-    });
+// Drag-drop handlers
+function makeDrop(dropEl, inputEl, onFiles){
+  ['dragenter','dragover'].forEach(e=>dropEl.addEventListener(e, ev=>{ev.preventDefault(); dropEl.classList.add('dragover')}))
+  ['dragleave','drop'].forEach(e=>dropEl.addEventListener(e, ev=>{ev.preventDefault(); dropEl.classList.remove('dragover')}))
+  dropEl.addEventListener('drop', ev=>{ ev.preventDefault(); const f = ev.dataTransfer.files; if(f.length) onFiles(f); })
+  dropEl.addEventListener('click', ()=>inputEl.click())
+  inputEl.addEventListener('change', ()=>{ if(inputEl.files.length) onFiles(inputEl.files) })
+}
 
-    pdfInput.addEventListener('change', ()=>{
-      if(pdfInput.files.length){
-        const file = pdfInput.files[0];
-        renderPdfFile(file);
-      }
-    });
+const imgDrop = document.getElementById('imgDrop');
+const pdfDrop = document.getElementById('pdfDrop');
+const imgInput = document.getElementById('imgInput');
+const pdfInput = document.getElementById('pdfInput');
+const bgimg = document.getElementById('bgimg');
+let currentImageFile = null; let currentPdfFile = null;
 
-    document.getElementById('clearBtn').addEventListener('click', ()=>{
-      bgimg.style.backgroundImage = '';
-      const ctx = document.getElementById('pdf-canvas').getContext('2d');
-      ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height);
-      imgInput.value=''; pdfInput.value='';
-    });
+makeDrop(imgDrop, imgInput, files=>{
+  const f = files[0];
+  if(!f.type.startsWith('image/')) return alert('Alege un fișier imagine.');
+  currentImageFile = f; showFile(f.name, f.type);
+  const url = URL.createObjectURL(f);
+  setBgImage(url);
+});
 
-    function renderPdfFile(file){
-      const reader = new FileReader();
-      reader.onload = function(){
-        const uint8 = new Uint8Array(this.result);
-        if(window.pdfjsLib && window.pdfjsLib.getDocument){
-          loadPdfFromData(uint8);
-        } else {
-          const s = document.createElement('script');
-          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.10.188/pdf.min.js';
-          s.onload = ()=>{window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.10.188/pdf.worker.min.js';loadPdfFromData(uint8);};
-          document.head.appendChild(s);
+makeDrop(pdfDrop, pdfInput, files=>{
+  const f = files[0];
+  if(f.type !== 'application/pdf') return alert('Alege un fișier PDF.');
+  currentPdfFile = f; showFile(f.name, f.type);
+  renderPdfFile(f);
+});
+
+function setBgImage(url){
+  // place image as CSS background to preserve text visibility and avoid distortion
+  bgimg.style.backgroundImage = `url(${url})`;
+}
+
+// fit mode and position
+const fitMode = document.getElementById('fitMode');
+const posMode = document.getElementById('posMode');
+function updateFit(){
+  const mode = fitMode.value; const pos = posMode.value;
+  bgimg.style.backgroundSize = mode === 'cover' ? 'cover' : 'contain';
+  bgimg.style.backgroundPosition = pos;
+}
+fitMode.addEventListener('change', updateFit);
+posMode.addEventListener('change', updateFit);
+updateFit();
+
+// Clear
+document.getElementById('clearBtn').addEventListener('click', ()=>{
+  bgimg.style.backgroundImage = '';
+  currentImageFile = null; currentPdfFile = null; filesList.innerHTML='';
+  const canvas = document.getElementById('pdf-canvas'); const ctx=canvas.getContext('2d'); ctx.clearRect(0,0,canvas.width,canvas.height);
+});
+
+// Download preview PNG (renders the card area into a canvas)
+// We'll draw the .card element into canvas using HTMLCanvas API via DOM-to-image technique.
+// To avoid external libs, we render only the Text3 area + overlays manually: draw background image then text.
+
+function downloadPreview(){
+  const text3 = document.getElementById('text3');
+  const rect = text3.getBoundingClientRect();
+  const scale = window.devicePixelRatio || 1;
+  const canvas = document.createElement('canvas'); canvas.width = Math.round(rect.width*scale); canvas.height = Math.round(rect.height*scale);
+  const ctx = canvas.getContext('2d'); ctx.scale(scale, scale);
+
+  // draw background color
+  ctx.fillStyle = '#071427'; ctx.fillRect(0,0,rect.width,rect.height);
+
+  // draw bg image if present
+  if(bgimg.style.backgroundImage){
+    const url = bgimg.style.backgroundImage.slice(5,-2);
+    const img = new Image(); img.crossOrigin = 'anonymous'; img.onload = ()=>{
+      const mode = fitMode.value;
+      let sx=0, sy=0, sWidth=img.width, sHeight=img.height;
+      // cover: compute crop so that image fills container without distortion
+      if(mode==='cover'){
+        const containerRatio = rect.width/rect.height; const imgRatio = img.width/img.height;
+        if(imgRatio > containerRatio){ // img wider -> crop sides
+          sHeight = img.height; sWidth = Math.round(img.height * containerRatio);
+          sx = Math.round((img.width - sWidth)/2);
+        } else { // img taller -> crop top/bottom
+          sWidth = img.width; sHeight = Math.round(img.width / containerRatio);
+          sy = Math.round((img.height - sHeight)/2);
         }
-      };
-      reader.readAsArrayBuffer(file);
-    }
+        ctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, rect.width, rect.height);
+      } else { // contain
+        const scaleFactor = Math.min(rect.width/img.width, rect.height/img.height);
+        const dw = img.width*scaleFactor; const dh = img.height*scaleFactor; const dx = (rect.width-dw)/2; const dy=(rect.height-dh)/2;
+        ctx.drawImage(img, 0,0,img.width,img.height, dx,dy,dw,dh);
+      }
 
-    function loadPdfFromData(uint8){
-      const loadingTask = window.pdfjsLib.getDocument({data:uint8});
-      loadingTask.promise.then(pdf=>{
-        pdf.getPage(1).then(page=>{
-          const viewport = page.getViewport({scale:1});
-          const canvas = document.getElementById('pdf-canvas');
-          const desiredWidth = canvas.clientWidth || 400;
-          const scale = desiredWidth / viewport.width;
-          const scaledViewport = page.getViewport({scale});
-          canvas.width = scaledViewport.width;
-          canvas.height = scaledViewport.height;
-          const renderContext = {canvasContext: canvas.getContext('2d'), viewport: scaledViewport};
-          page.render(renderContext);
-        });
-      });
+      // overlay gradient like CSS to keep text readable
+      const grad = ctx.createLinearGradient(0,0,0,rect.height); grad.addColorStop(0,'rgba(2,6,23,0.48)'); grad.addColorStop(1,'rgba(2,6,23,0.12)'); ctx.fillStyle = grad; ctx.fillRect(0,0,rect.width,rect.height);
+
+      // draw the text
+      ctx.fillStyle = '#ffffff'; ctx.textAlign='center';
+      ctx.font = '700 20px Inter, sans-serif'; ctx.fillText('Text3', rect.width/2, rect.height/2 - 6);
+      ctx.font = '400 13px Inter, sans-serif'; ctx.fillStyle = '#cbd5e1'; ctx.fillText('Acesta este textul care trebuie să rămână vizibil. Imaginea va fi în spate, scalată proporțional.', rect.width/2, rect.height/2 + 18);
+
+      // download
+      const a = document.createElement('a'); a.download = 'preview-text3.png'; a.href = canvas.toDataURL('image/png'); a.click();
+    };
+    img.onerror = ()=>alert('Eroare la încărcare imagine pentru descărcare.');
+    img.src = url;
+  } else {
+    // no bg image, just render text
+    ctx.fillStyle = '#0b1220'; ctx.fillRect(0,0,rect.width,rect.height);
+    ctx.fillStyle = '#fff'; ctx.textAlign='center'; ctx.font='700 20px Inter, sans-serif'; ctx.fillText('Text3', rect.width/2, rect.height/2 - 6);
+    ctx.font='400 13px Inter, sans-serif'; ctx.fillStyle='#cbd5e1'; ctx.fillText('Acesta este textul care trebuie să rămână vizibil. Imaginea va fi în spate, scalată proporțional.', rect.width/2, rect.height/2 + 18);
+    const a=document.createElement('a'); a.download='preview-text3.png'; a.href=canvas.toDataURL('image/png'); a.click();
+  }
+}
+
+document.getElementById('downloadBtn').addEventListener('click', downloadPreview);
+
+// --- PDF rendering (using built-in browser APIs + PDF.js via CDN) ---
+// We'll dynamically add PDF.js script. If it fails, fallback to opening blob in new tab.
+
+function renderPdfFile(file){
+  const canvas = document.getElementById('pdf-canvas'); const ctx = canvas.getContext('2d');
+  const reader = new FileReader(); reader.onload = function(){
+    const uint8 = new Uint8Array(this.result);
+    if(window.pdfjsLib && window.pdfjsLib.getDocument){
+      loadPdfFromData(uint8);
+    } else {
+      // load pdf.js from CDN
+      const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.10.188/pdf.min.js'; s.onload = ()=>{ window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.10.188/pdf.worker.min.js'; loadPdfFromData(uint8); };
+      s.onerror = ()=>{ // fallback - open blob
+        const blob = new Blob([uint8], {type:'application/pdf'}); const url = URL.createObjectURL(blob); window.open(url, '_blank');
+      }
+      document.head.appendChild(s);
     }
-  </script>
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function loadPdfFromData(uint8){
+  const loadingTask = window.pdfjsLib.getDocument({data:uint8});
+  loadingTask.promise.then(function(pdf){
+    // fetch first page
+    pdf.getPage(1).then(function(page){
+      const viewport = page.getViewport({scale:1});
+      const canvas = document.getElementById('pdf-canvas');
+      const desiredWidth = canvas.clientWidth || 320;
+      const scale = desiredWidth / viewport.width;
+      const scaledViewport = page.getViewport({scale});
+      canvas.width = Math.floor(scaledViewport.width);
+      canvas.height = Math.floor(scaledViewport.height);
+      const renderContext = {canvasContext: canvas.getContext('2d'), viewport: scaledViewport};
+      page.render(renderContext);
+    });
+  }, function(reason){
+    console.error(reason); alert('Eroare la afișare PDF: '+reason);
+  });
+}
+
+// download original uploaded pdf
+document.getElementById('loadPdfBtn').addEventListener('click', ()=>{
+  if(!currentPdfFile) return alert('Nu e niciun PDF încărcat.');
+  const url = URL.createObjectURL(currentPdfFile); const a = document.createElement('a'); a.href=url; a.download = currentPdfFile.name; a.click();
+});
+
+</script>
 </body>
 </html>
