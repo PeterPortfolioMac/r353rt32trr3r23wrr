@@ -2,148 +2,196 @@
 <html lang="ro">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>360° Panorama Viewer</title>
-
-  <!-- Three.js (CDN) -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 
   <style>
     :root{
-      --bg1:#060913;
-      --bg2:#021b2a;
-      --card: rgba(255,255,255,.08);
-      --card2: rgba(255,255,255,.10);
-      --stroke: rgba(255,255,255,.16);
-      --text: rgba(255,255,255,.92);
-      --muted: rgba(255,255,255,.72);
-      --primary:#6d5cff;
+      --bg0:#05070b;
+      --bg1:#071620;
+      --card:rgba(255,255,255,.06);
+      --card2:rgba(255,255,255,.09);
+      --text:#eaf2ff;
+      --muted:rgba(234,242,255,.72);
+      --muted2:rgba(234,242,255,.55);
+      --accent:#7c5cff;
+      --accent2:#49d3ff;
       --danger:#ff4d4d;
       --ok:#3ddc97;
-      --shadow: 0 24px 60px rgba(0,0,0,.55);
+      --shadow: 0 20px 80px rgba(0,0,0,.55);
       --radius: 18px;
     }
-
     *{box-sizing:border-box}
     html,body{height:100%}
     body{
       margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Apple Color Emoji","Segoe UI Emoji";
       color:var(--text);
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Apple Color Emoji","Segoe UI Emoji";
       background:
-        radial-gradient(900px 500px at 18% 16%, rgba(109,92,255,.25), transparent 55%),
-        radial-gradient(900px 600px at 78% 20%, rgba(61,220,151,.18), transparent 60%),
-        linear-gradient(180deg, var(--bg1), var(--bg2));
-      padding:24px;
+        radial-gradient(1200px 600px at 20% 0%, rgba(124,92,255,.25), transparent 55%),
+        radial-gradient(1000px 600px at 90% 10%, rgba(73,211,255,.18), transparent 55%),
+        radial-gradient(900px 500px at 50% 100%, rgba(61,220,151,.10), transparent 55%),
+        linear-gradient(180deg, var(--bg1), var(--bg0));
     }
-
-    .wrap{max-width:1200px; margin:0 auto; display:flex; flex-direction:column; gap:16px;}
+    .wrap{
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px 18px 28px;
+    }
     header{
-      padding:20px 22px;
-      background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.06));
-      border:1px solid var(--stroke);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(10px);
+      display:flex;
+      gap:16px;
+      align-items:flex-start;
+      justify-content:space-between;
+      margin-bottom:14px;
     }
-    h1{margin:0 0 6px; font-size: clamp(20px, 3vw, 30px); letter-spacing:.2px;}
-    .sub{color:var(--muted); font-size:14px; line-height:1.35}
-    .toprow{display:flex; gap:10px; align-items:flex-start; justify-content:space-between; flex-wrap:wrap}
-    .chips{display:flex; gap:10px; flex-wrap:wrap}
-    .chip{
-      padding:8px 10px;
-      border-radius:999px;
-      border:1px solid var(--stroke);
-      background: rgba(0,0,0,.25);
-      color: var(--muted);
-      font-size:12px;
-      user-select:none;
+    .title{
+      display:flex;
+      flex-direction:column;
+      gap:8px;
     }
-
+    h1{
+      margin:0;
+      font-size: clamp(20px, 2.2vw, 30px);
+      letter-spacing:.2px;
+    }
+    .subtitle{
+      color:var(--muted);
+      line-height:1.35;
+      font-size: 14px;
+      max-width: 820px;
+    }
     .panel{
-      padding:14px;
-      background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.06));
-      border:1px solid var(--stroke);
+      background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.04));
+      border: 1px solid rgba(255,255,255,.10);
       border-radius: var(--radius);
       box-shadow: var(--shadow);
-      backdrop-filter: blur(10px);
+      overflow:hidden;
     }
-
-    .controls .row{
-      display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+    .controls{
+      padding: 14px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
     }
-
+    .row{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
     .file{
-      display:flex; align-items:center; gap:10px;
-      padding:10px 12px;
-      background: rgba(0,0,0,.20);
-      border:1px solid var(--stroke);
-      border-radius: 12px;
-      min-width: min(620px, 100%);
-      flex: 1 1 360px;
+      flex: 1 1 320px;
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: rgba(0,0,0,.24);
+      border:1px solid rgba(255,255,255,.10);
+      min-width: 280px;
     }
-    .file label{font-size:13px; color:var(--muted); white-space:nowrap}
-    .file input[type="file"]{max-width: 100%}
+    .file label{
+      font-size:13px;
+      color:var(--muted);
+      white-space:nowrap;
+    }
+    .file input[type="file"]{
+      width:100%;
+      color:var(--muted2);
+    }
 
     .btn{
-      border:1px solid var(--stroke);
-      background: rgba(255,255,255,.06);
+      appearance:none;
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.07);
       color: var(--text);
-      padding:10px 12px;
-      border-radius: 12px;
+      padding: 10px 12px;
+      border-radius: 14px;
       cursor:pointer;
-      transition: transform .06s ease, background .15s ease, border-color .15s ease;
-      user-select:none;
+      transition: transform .06s ease, background .2s ease, border-color .2s ease;
       font-weight:600;
-      font-size:13px;
+      font-size: 13px;
+      line-height:1;
+      white-space:nowrap;
     }
-    .btn:hover{background: rgba(255,255,255,.10); border-color: rgba(255,255,255,.25)}
-    .btn:active{transform: translateY(1px)}
-    .btn.primary{background: rgba(109,92,255,.22); border-color: rgba(109,92,255,.55)}
-    .btn.primary:hover{background: rgba(109,92,255,.30)}
-    .btn.danger{background: rgba(255,77,77,.18); border-color: rgba(255,77,77,.55)}
-    .btn.danger:hover{background: rgba(255,77,77,.26)}
-    .btn.ok{background: rgba(61,220,151,.16); border-color: rgba(61,220,151,.50)}
-    .btn.ok:hover{background: rgba(61,220,151,.22)}
-
+    .btn:hover{ background: rgba(255,255,255,.10); border-color: rgba(255,255,255,.18); }
+    .btn:active{ transform: translateY(1px); }
+    .btn.primary{
+      background: linear-gradient(135deg, rgba(124,92,255,.95), rgba(73,211,255,.65));
+      border-color: rgba(124,92,255,.35);
+    }
+    .btn.primary:hover{ filter: brightness(1.03); }
+    .btn.danger{
+      background: rgba(255,77,77,.14);
+      border-color: rgba(255,77,77,.28);
+      color: #ffd7d7;
+    }
     .status{
-      margin-top:10px;
-      padding:10px 12px;
-      border-radius: 12px;
-      border:1px solid var(--stroke);
-      background: rgba(0,0,0,.18);
+      width:100%;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: rgba(0,0,0,.22);
+      border:1px solid rgba(255,255,255,.10);
+      font-size: 13px;
       color: var(--muted);
-      font-size:13px;
-      overflow:auto;
     }
-    .status.ok{border-color: rgba(61,220,151,.55); color: rgba(255,255,255,.86)}
-    .status.err{border-color: rgba(255,77,77,.55); color: rgba(255,200,200,.95)}
+    .status strong{ color: var(--text); }
 
     .viewer{
-      height: clamp(380px, 60vh, 720px);
+      margin-top: 14px;
+      height: min(70vh, 640px);
       border-radius: var(--radius);
       overflow:hidden;
-      border:1px solid rgba(255,255,255,.14);
-      background: #000;
       position:relative;
+      background: #000;
+      border: 1px solid rgba(255,255,255,.10);
     }
+    canvas{ display:block; width:100%; height:100%; }
+
     .hud{
       position:absolute;
-      left:12px; top:12px;
-      display:flex; gap:10px; flex-wrap:wrap;
+      left: 12px;
+      top: 12px;
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
       pointer-events:none;
     }
-    .hud .chip{pointer-events:none; background: rgba(0,0,0,.35)}
+    .pill{
+      font-size: 12px;
+      color: rgba(255,255,255,.85);
+      background: rgba(0,0,0,.38);
+      border:1px solid rgba(255,255,255,.12);
+      padding: 6px 10px;
+      border-radius: 999px;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
     .help{
       position:absolute;
-      left:12px; bottom:12px;
-      display:flex; gap:10px; flex-wrap:wrap;
+      left: 12px;
+      bottom: 12px;
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
       pointer-events:none;
     }
+    .hint{
+      font-size: 12px;
+      color: rgba(255,255,255,.78);
+      background: rgba(0,0,0,.35);
+      border:1px solid rgba(255,255,255,.10);
+      padding: 6px 10px;
+      border-radius: 999px;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
 
-    @media (max-width: 640px){
-      body{padding:16px}
-      .file{min-width: 100%}
+    @media (max-width: 720px){
+      header{ flex-direction:column; align-items:flex-start; }
+      .viewer{ height: min(70vh, 520px); }
+      .btn{ padding: 10px 11px; }
     }
   </style>
 </head>
@@ -151,18 +199,14 @@
 <body>
   <div class="wrap">
     <header>
-      <div class="toprow">
-        <div>
-          <h1>360° Panorama Viewer (drag cu mouse / touch)</h1>
-          <div class="sub">
-            Încarcă o panoramă equirectangulară (raport ~2:1). Dacă e foarte mare, se face downscale automat la limita GPU.
-            <br>
-            <b>Pe file://</b> nu poți auto-încărca fișiere locale din folder (restricții Chrome). Folosește upload sau rulează pe server (XAMPP/localhost).
-          </div>
-        </div>
-        <div class="chips">
-          <div class="chip" id="gpuInfo">MAX_TEXTURE_SIZE: ?</div>
-          <div class="chip" id="imgInfo">Imagine: —</div>
+      <div class="title">
+        <h1>360° Panorama Viewer (drag cu mouse / touch)</h1>
+        <div class="subtitle">
+          Încarcă o panoramă equirectangulară (raport ~2:1).
+          Dacă imaginea e foarte mare (ex. 11968×5984), viewer-ul o micșorează automat la limita GPU pentru a evita ecranul negru.
+          <br>
+          <b>Pe file://</b> merge și butonul „Încarcă pano1.jpg”, dacă fișierul există lângă <code>index.html</code>.
+          Pe <b>github.io</b> pune fișierele în repo și folosește căi relative / URL public.
         </div>
       </div>
     </header>
@@ -176,32 +220,41 @@
 
         <button class="btn primary" id="loadDefaultBtn">Încarcă pano1.jpg (din folder)</button>
 
-        <!-- NOU: JSON -->
-        <div class="file" style="min-width:min(420px,100%); flex: 1 1 280px;">
-          <label for="jsonInput">Încarcă JSON…</label>
-          <input id="jsonInput" type="file" accept="application/json,.json" />
-        </div>
-        <button class="btn ok" id="loadJsonDefaultBtn">Încarcă pano.json (auto)</button>
-
         <button class="btn" id="resetBtn">Reset view</button>
         <button class="btn" id="autoBtn">Auto-rotate</button>
         <button class="btn danger" id="stopBtn">Stop</button>
       </div>
 
-      <div class="status" id="status">Status: Aștept o imagine…</div>
+      <div class="row">
+        <div class="file">
+          <label for="jsonInput">JSON cu cale/URL…</label>
+          <input id="jsonInput" type="file" accept="application/json,.json" />
+        </div>
+        <button class="btn" id="loadJsonBtn">Încarcă JSON</button>
+        <button class="btn" id="loadJsonDefaultBtn">Încarcă config.json (din folder)</button>
+      </div>
+
+      <div class="row">
+        <div class="status" id="status">Status: aștept o imagine…</div>
+      </div>
     </div>
 
-    <div class="panel viewer" id="viewer">
+    <div class="viewer" id="viewer">
       <div class="hud">
-        <div class="chip" id="hudTex">—</div>
+        <div class="pill" id="gpuInfo">MAX_TEXTURE_SIZE: …</div>
+        <div class="pill" id="imgInfo">Imagine: —</div>
       </div>
+
       <div class="help">
-        <div class="chip">Drag: rotire</div>
-        <div class="chip">Wheel/pinch: zoom</div>
-        <div class="chip">Double click: reset</div>
+        <div class="hint">Drag: rotire</div>
+        <div class="hint">Wheel/pinch: zoom</div>
+        <div class="hint">Double click: reset</div>
       </div>
     </div>
   </div>
+
+  <!-- Three.js (CDN). Pentru github.io e perfect. -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 
   <script>
     // ====== Setup Three.js ======
@@ -209,20 +262,55 @@
     const statusEl = document.getElementById('status');
     const gpuInfoEl = document.getElementById('gpuInfo');
     const imgInfoEl = document.getElementById('imgInfo');
-    const hudTexEl = document.getElementById('hudTex');
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(70, 1, 0.1, 2000);
     camera.position.set(0, 0, 0.1);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     viewerEl.appendChild(renderer.domElement);
 
+    // --- GPU limits ---
+    const gl = renderer.getContext();
+    const MAX_TEX = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+    gpuInfoEl.textContent = `MAX_TEXTURE_SIZE: ${MAX_TEX}`;
+
+    // Sphere (inside-out)
+    const geometry = new THREE.SphereGeometry(500, 64, 32);
+    geometry.scale(-1, 1, 1);
+
+    let material = new THREE.MeshBasicMaterial({ color: 0x000000 });
+    const sphere = new THREE.Mesh(geometry, material);
+    scene.add(sphere);
+
+    // ====== Controls state ======
+    let isUserInteracting = false;
+    let lon = 0, lat = 0;
+    let phi = 0, theta = 0;
+    let onPointerDownPointerX = 0, onPointerDownPointerY = 0;
+    let onPointerDownLon = 0, onPointerDownLat = 0;
+
+    let fov = 70;
+    const fovMin = 35;
+    const fovMax = 95;
+
+    let autoRotate = false;
+    let autoRotateSpeed = 0.06; // deg per frame-ish
+
+    function setStatus(msg, type="info"){
+      // type: info | ok | err
+      const color = type === "ok" ? "var(--ok)" : type === "err" ? "var(--danger)" : "var(--muted)";
+      statusEl.innerHTML = `<strong>Status:</strong> <span style="color:${color}">${escapeHtml(msg)}</span>`;
+    }
+
+    function escapeHtml(s){
+      return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+    }
+
     function resize(){
-      const rect = viewerEl.getBoundingClientRect();
-      const w = Math.max(1, Math.floor(rect.width));
-      const h = Math.max(1, Math.floor(rect.height));
+      const w = viewerEl.clientWidth;
+      const h = viewerEl.clientHeight;
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h, false);
@@ -230,334 +318,332 @@
     window.addEventListener('resize', resize);
     resize();
 
-    const MAX_TEX = renderer.capabilities.maxTextureSize || 4096;
-    gpuInfoEl.textContent = `MAX_TEXTURE_SIZE: ${MAX_TEX}`;
-
-    // Sphere inside-out
-    const geometry = new THREE.SphereGeometry(500, 64, 64);
-    geometry.scale(-1, 1, 1);
-
-    let material = new THREE.MeshBasicMaterial({ color: 0x000000 });
-    let sphere = new THREE.Mesh(geometry, material);
-    scene.add(sphere);
-
-    // ====== Camera control ======
-    let isDown = false;
-    let lastX = 0, lastY = 0;
-    let yaw = 0, pitch = 0;
-    let fov = 70;
-    let autoRotate = false;
-
-    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-
-    function applyCamera(){
-      pitch = clamp(pitch, -Math.PI/2 + 0.02, Math.PI/2 - 0.02);
-      camera.fov = clamp(fov, 30, 100);
-      camera.updateProjectionMatrix();
-
-      const dir = new THREE.Vector3(
-        Math.cos(pitch) * Math.sin(yaw),
-        Math.sin(pitch),
-        Math.cos(pitch) * Math.cos(yaw)
-      );
-      camera.lookAt(dir);
-    }
-
-    function resetView(){
-      yaw = 0; pitch = 0; fov = 70;
-      applyCamera();
-      setStatus("Reset view.", true);
-    }
-
-    function onPointerDown(e){
-      isDown = true;
-      lastX = e.clientX;
-      lastY = e.clientY;
+    // ====== Interaction ======
+    viewerEl.addEventListener('pointerdown', (e)=>{
+      isUserInteracting = true;
       viewerEl.setPointerCapture?.(e.pointerId);
-    }
-    function onPointerMove(e){
-      if(!isDown) return;
-      const dx = e.clientX - lastX;
-      const dy = e.clientY - lastY;
-      lastX = e.clientX; lastY = e.clientY;
+      onPointerDownPointerX = e.clientX;
+      onPointerDownPointerY = e.clientY;
+      onPointerDownLon = lon;
+      onPointerDownLat = lat;
+    });
 
-      yaw   -= dx * 0.005;
-      pitch -= dy * 0.005;
-      applyCamera();
-    }
-    function onPointerUp(e){
-      isDown = false;
-      viewerEl.releasePointerCapture?.(e.pointerId);
-    }
+    viewerEl.addEventListener('pointermove', (e)=>{
+      if(!isUserInteracting) return;
+      const dx = (e.clientX - onPointerDownPointerX);
+      const dy = (e.clientY - onPointerDownPointerY);
+      lon = onPointerDownLon - dx * 0.1;
+      lat = onPointerDownLat + dy * 0.1;
+    });
 
-    viewerEl.addEventListener('pointerdown', onPointerDown);
-    viewerEl.addEventListener('pointermove', onPointerMove);
-    viewerEl.addEventListener('pointerup', onPointerUp);
-    viewerEl.addEventListener('pointercancel', onPointerUp);
-    viewerEl.addEventListener('dblclick', resetView);
+    viewerEl.addEventListener('pointerup', ()=>{
+      isUserInteracting = false;
+    });
 
+    // wheel zoom
     viewerEl.addEventListener('wheel', (e)=>{
       e.preventDefault();
-      fov += e.deltaY * 0.03;
-      applyCamera();
+      const delta = Math.sign(e.deltaY);
+      fov = THREE.MathUtils.clamp(fov + delta * 2.4, fovMin, fovMax);
+      camera.fov = fov;
+      camera.updateProjectionMatrix();
     }, { passive:false });
 
-    // Touch pinch zoom
-    let touchDist0 = null;
-    viewerEl.addEventListener('touchstart', (e)=>{
-      if(e.touches.length === 2){
-        const dx = e.touches[0].clientX - e.touches[1].clientX;
-        const dy = e.touches[0].clientY - e.touches[1].clientY;
-        touchDist0 = Math.hypot(dx, dy);
-      }
-    }, { passive:true });
+    // double click reset
+    viewerEl.addEventListener('dblclick', ()=>{
+      resetView();
+    });
 
+    // touch pinch zoom
+    let lastDist = null;
     viewerEl.addEventListener('touchmove', (e)=>{
-      if(e.touches.length === 2 && touchDist0){
+      if(e.touches && e.touches.length === 2){
+        e.preventDefault();
         const dx = e.touches[0].clientX - e.touches[1].clientX;
         const dy = e.touches[0].clientY - e.touches[1].clientY;
         const dist = Math.hypot(dx, dy);
-        const delta = (touchDist0 - dist) * 0.06;
-        fov += delta;
-        touchDist0 = dist;
-        applyCamera();
+        if(lastDist !== null){
+          const dd = dist - lastDist;
+          fov = THREE.MathUtils.clamp(fov - dd * 0.03, fovMin, fovMax);
+          camera.fov = fov;
+          camera.updateProjectionMatrix();
+        }
+        lastDist = dist;
       }
-    }, { passive:true });
+    }, { passive:false });
 
-    viewerEl.addEventListener('touchend', ()=>{ touchDist0 = null; }, { passive:true });
+    viewerEl.addEventListener('touchend', ()=>{
+      lastDist = null;
+    });
 
-    // ====== UI status helpers ======
-    function setStatus(msg, ok=false){
-      statusEl.textContent = msg;
-      statusEl.classList.toggle('ok', !!ok);
-      statusEl.classList.remove('err');
-    }
-    function setError(msg){
-      statusEl.textContent = "Eroare: " + msg;
-      statusEl.classList.add('err');
-      statusEl.classList.remove('ok');
-      console.error(msg);
+    function resetView(){
+      lon = 0; lat = 0;
+      fov = 70;
+      camera.fov = fov;
+      camera.updateProjectionMatrix();
+      setStatus("View reset.", "ok");
     }
 
     // ====== Image loading ======
-    function imageFromFile(file){
-      return new Promise((resolve, reject)=>{
-        const reader = new FileReader();
-        reader.onload = ()=>{
-          const img = new Image();
-          img.onload = ()=> resolve(img);
-          img.onerror = ()=> reject(new Error("Nu pot citi imaginea încărcată."));
-          img.src = reader.result;
-        };
-        reader.onerror = ()=> reject(new Error("Nu pot citi fișierul."));
-        reader.readAsDataURL(file);
-      });
-    }
 
-    async function imageFromURL(url){
-      // Funcționează sigur pe http(s). Pe file:// poate fi blocat (security) -> folosește upload sau server.
+    async function imageFromFile(file){
       return new Promise((resolve, reject)=>{
+        const url = URL.createObjectURL(file);
         const img = new Image();
-        // crossOrigin ajută la WebGL pe http(s) când ai CORS corect.
-        // Pe file:// poate crea probleme; dar oricum Chrome blochează textura fără user gesture.
-        if(location.protocol !== 'file:' && !url.startsWith('data:')){
-          img.crossOrigin = "anonymous";
-        }
-        img.onload = ()=> resolve(img);
-        img.onerror = ()=> reject(new Error("Nu pot încărca URL-ul. Verifică dacă rulezi pe server și fișierul există."));
+        img.onload = ()=>{
+          URL.revokeObjectURL(url);
+          resolve(img);
+        };
+        img.onerror = ()=>reject(new Error("Nu pot citi imaginea (fișier invalid sau blocat)."));
         img.src = url;
       });
     }
 
-    function downscaleToMaxTexture(img, maxTex){
-      const origW = img.naturalWidth || img.width;
-      const origH = img.naturalHeight || img.height;
+    async function imageFromURL(url){
+      // FIX: merge și pe file:// dacă fișierul este lângă index.html.
+      // Pentru http(s) păstrăm comportamentul standard.
+      return new Promise((resolve, reject)=>{
+        const img = new Image();
 
-      // dacă e deja OK
-      if(origW <= maxTex && origH <= maxTex) {
-        return { img, w: origW, h: origH, scaled:false };
-      }
+        const isHttp = location.protocol === "http:" || location.protocol === "https:";
+        if(isHttp){
+          // dacă tragi imagini de pe alt domeniu și vrei canvas safe, ai nevoie de CORS ok.
+          img.crossOrigin = "anonymous";
+        }
 
-      // păstrăm proporția
-      const scale = Math.min(maxTex / origW, maxTex / origH);
-      const w = Math.max(1, Math.floor(origW * scale));
-      const h = Math.max(1, Math.floor(origH * scale));
+        img.onload = ()=> resolve(img);
+        img.onerror = ()=> reject(new Error(`Nu pot încărca imaginea: ${url}`));
+
+        // Important: fă URL absolut (evită edge-case-uri pe file://)
+        const absolute = new URL(url, window.location.href).href;
+        img.src = absolute;
+      });
+    }
+
+    function calcDownscaleSize(w, h){
+      // 1) respectă limita GPU
+      // 2) safe cap (multe device-uri dau rateuri cu texturi enorme)
+      const SAFE_CAP = Math.min(8192, MAX_TEX);
+      const maxSide = Math.min(MAX_TEX, SAFE_CAP);
+
+      const scale = Math.min(1, maxSide / Math.max(w, h));
+      return {
+        w: Math.max(1, Math.round(w * scale)),
+        h: Math.max(1, Math.round(h * scale)),
+        scale
+      };
+    }
+
+    function downscaleToCanvas(img){
+      const {w, h, scale} = calcDownscaleSize(img.naturalWidth || img.width, img.naturalHeight || img.height);
+      const needs = scale < 1;
 
       const canvas = document.createElement('canvas');
-      canvas.width = w; canvas.height = h;
+      canvas.width = w;
+      canvas.height = h;
       const ctx = canvas.getContext('2d', { alpha:false });
 
-      // IMPORTANT: dacă imaginea e "tainted" (cross-origin fără CORS), drawImage va merge,
-      // dar citirea (toDataURL) poate fi blocată. În cazul acesta, vei vedea eroare.
+      // drawImage downscale
       ctx.drawImage(img, 0, 0, w, h);
 
-      const outImg = new Image();
-      outImg.src = canvas.toDataURL('image/jpeg', 0.92);
-
-      return { img: outImg, w, h, scaled:true, origW, origH };
+      return { canvas, w, h, needs };
     }
 
-    async function loadPanoramaFromImage(img, label="(upload)"){
-      try{
-        setStatus("Procesez imaginea…");
-        const origW = img.naturalWidth || img.width;
-        const origH = img.naturalHeight || img.height;
+    async function loadPanoramaFromImage(img, label="(imagine)"){
+      const srcW = img.naturalWidth || img.width;
+      const srcH = img.naturalHeight || img.height;
 
-        // downscale dacă depășește limita GPU
-        const ds = downscaleToMaxTexture(img, MAX_TEX);
-        const finalImg = await new Promise((resolve, reject)=>{
-          ds.img.onload = ()=> resolve(ds.img);
-          ds.img.onerror = ()=> reject(new Error("Nu pot pregăti imaginea (downscale)."));
-          // dacă ds.img e chiar img și e deja loaded, onload nu mai vine
-          if(ds.img.complete && (ds.img.naturalWidth || ds.img.width)) resolve(ds.img);
-        });
-
-        // textură
-        const texture = new THREE.Texture(finalImg);
-        texture.needsUpdate = true;
-        texture.minFilter = THREE.LinearFilter;
-        texture.magFilter = THREE.LinearFilter;
-        texture.generateMipmaps = false;
-
-        // aplică pe sferă
-        if(material.map) material.map.dispose();
-        material.dispose();
-
-        material = new THREE.MeshBasicMaterial({ map: texture });
-        sphere.material = material;
-
-        applyCamera();
-
-        // UI info
-        imgInfoEl.textContent = `Imagine: ${label}`;
-        if(ds.scaled){
-          hudTexEl.textContent = `${label} | downscale ${ds.origW}×${ds.origH} → ${ds.w}×${ds.h} (${ds.w}x${ds.h})`;
-        } else {
-          hudTexEl.textContent = `${label} | size ${origW}×${origH}`;
-        }
-
-        setStatus("Imagine încărcată ✅", true);
-
-        // sugestie dacă nu e 2:1
-        const ratio = (origW / origH);
-        if(ratio < 1.8 || ratio > 2.2){
-          setStatus(`Imagine încărcată ✅ (dar raportul nu pare 2:1: ${ratio.toFixed(2)}). Dacă e distorsionată, exportă equirectangular 2:1.`, true);
-        }
-      } catch(err){
-        setError(err.message || String(err));
+      if(!srcW || !srcH){
+        setStatus("Imagine invalidă (0×0).", "err");
+        return;
       }
+
+      const {canvas, w, h, needs} = downscaleToCanvas(img);
+
+      // Texture
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.minFilter = THREE.LinearFilter;
+      tex.magFilter = THREE.LinearFilter;
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.ClampToEdgeWrapping;
+      tex.needsUpdate = true;
+
+      // dispose old material/texture
+      if(material?.map){
+        material.map.dispose();
+      }
+      material.dispose?.();
+
+      material = new THREE.MeshBasicMaterial({ map: tex });
+      sphere.material = material;
+
+      const info = needs
+        ? `${label} | downscale ${srcW}×${srcH} → ${w}×${h} (${w}×${h})`
+        : `${label} | size ${srcW}×${srcH}`;
+
+      imgInfoEl.textContent = `Imagine: ${info}`;
+      setStatus(`Încărcat: ${label}`, "ok");
     }
 
-    // ====== Loaders: image upload ======
+    // ====== JSON loading ======
+    function extractPanoUrlFromJson(obj){
+      if(!obj || typeof obj !== "object") return null;
+      // Acceptă mai multe chei
+      return obj.pano || obj.url || obj.image || obj.src || null;
+    }
+
+    async function readJsonFile(file){
+      const text = await file.text();
+      return JSON.parse(text);
+    }
+
+    async function loadFromJsonURL(jsonUrl){
+      // JSON-ul trebuie să fie accesibil (same-origin pe github pages sau CORS ok).
+      const abs = new URL(jsonUrl, window.location.href).href;
+      const res = await fetch(abs, { cache: "no-store" });
+      if(!res.ok) throw new Error(`Nu pot încărca JSON (${res.status}).`);
+      const data = await res.json();
+      const pano = extractPanoUrlFromJson(data);
+      if(!pano) throw new Error("JSON invalid. Exemplu: {\"pano\":\"pano1.jpg\"}");
+      const img = await imageFromURL(pano);
+      await loadPanoramaFromImage(img, pano);
+    }
+
+    // ====== UI wiring ======
+
+    // manual image upload
     document.getElementById('fileInput').addEventListener('change', async (e)=>{
-      const file = e.target.files && e.target.files[0];
+      const file = e.target.files?.[0];
       if(!file) return;
-      setStatus("Încarc fișierul…");
       try{
+        setStatus("Încarc imaginea aleasă…");
         const img = await imageFromFile(file);
         await loadPanoramaFromImage(img, file.name);
       }catch(err){
-        setError(err.message || String(err));
+        console.error(err);
+        setStatus(err.message || "Eroare la încărcare.", "err");
       }
     });
 
-    // ====== Default load pano1.jpg ======
+    // default pano1.jpg from folder
     document.getElementById('loadDefaultBtn').addEventListener('click', async ()=>{
-      setStatus("Încerc să încarc pano1.jpg…");
+      setStatus("Încerc să încarc pano1.jpg din același folder…");
       try{
-        // Pe file://: Chrome nu permite auto-load din folder în mod fiabil (tex CORS/opaque origin).
-        if(location.protocol === 'file:'){
-          throw new Error("Pe file:// nu se poate auto-încărca pano1.jpg. Rulează pe http://localhost (XAMPP) sau folosește upload.");
-        }
         const img = await imageFromURL('pano1.jpg');
         await loadPanoramaFromImage(img, 'pano1.jpg');
       }catch(err){
-        setError((err && err.message ? err.message : String(err)));
+        console.error(err);
+        setStatus(
+          "Nu am găsit/putut încărca pano1.jpg. Verifică dacă e lângă index.html (pe github.io trebuie să fie în repo).",
+          "err"
+        );
       }
     });
 
-    // ====== NOU: JSON loader ======
-    // Format:
-    // { "panorama": "pano1.jpg" }
-    // { "panorama": "https://..." }
-    // { "panorama": "data:image/jpeg;base64,..." }
-    async function loadFromJsonText(jsonText, label="(json)"){
-      let data;
+    // JSON upload
+    document.getElementById('loadJsonBtn').addEventListener('click', async ()=>{
+      const input = document.getElementById('jsonInput');
+      const file = input.files?.[0];
+      if(!file){
+        setStatus("Alege un fișier JSON mai întâi.", "err");
+        return;
+      }
       try{
-        data = JSON.parse(jsonText);
-      }catch{
-        throw new Error("JSON invalid.");
-      }
-      const pano = data.panorama || data.jpg || data.image || data.url;
-      if(!pano || typeof pano !== 'string'){
-        throw new Error('JSON-ul trebuie să conțină un câmp "panorama" (string). Ex: {"panorama":"pano1.jpg"}');
-      }
-
-      // Dacă e path local (D:\...) nu va funcționa în browser.
-      if(/^[a-zA-Z]:\\/.test(pano) || pano.startsWith('\\\\')){
-        throw new Error("Calea Windows (D:\\...) nu poate fi folosită direct în browser. Pune fișierul pe server (XAMPP) și folosește URL/relativ, sau folosește upload.");
-      }
-
-      // Pe file://, doar data: e sigur pentru auto-load
-      if(location.protocol === 'file:' && !pano.startsWith('data:')){
-        throw new Error("Pe file:// JSON-ul poate încărca automat doar data:... (base64). Pentru pano1.jpg relativ, rulează pe server (http://localhost).");
-      }
-
-      const img = await imageFromURL(pano);
-      await loadPanoramaFromImage(img, label);
-    }
-
-    // upload JSON
-    document.getElementById('jsonInput').addEventListener('change', async (e)=>{
-      const file = e.target.files && e.target.files[0];
-      if(!file) return;
-      setStatus("Citesc JSON…");
-      try{
-        const text = await file.text();
-        await loadFromJsonText(text, file.name);
+        setStatus("Citesc JSON…");
+        const data = await readJsonFile(file);
+        const pano = extractPanoUrlFromJson(data);
+        if(!pano) throw new Error("JSON invalid. Exemplu: {\"pano\":\"pano1.jpg\"}");
+        setStatus(`Încarc panorama din JSON: ${pano} …`);
+        const img = await imageFromURL(pano);
+        await loadPanoramaFromImage(img, pano);
       }catch(err){
-        setError(err.message || String(err));
+        console.error(err);
+        setStatus(err.message || "Eroare la încărcarea JSON.", "err");
       }
     });
 
-    // auto JSON: pano.json lângă index.html
+    // default config.json from folder (pentru github.io ideal)
     document.getElementById('loadJsonDefaultBtn').addEventListener('click', async ()=>{
-      setStatus("Încerc să încarc pano.json…");
       try{
-        if(location.protocol === 'file:'){
-          throw new Error("Pe file:// nu pot face fetch la pano.json. Folosește upload JSON sau rulează pe server (XAMPP).");
-        }
-        const res = await fetch('pano.json', { cache:'no-store' });
-        if(!res.ok) throw new Error("Nu găsesc pano.json (status " + res.status + ")");
-        const text = await res.text();
-        await loadFromJsonText(text, "pano.json");
+        setStatus("Încerc să încarc config.json din folder…");
+        await loadFromJsonURL('config.json');
+        setStatus("Încărcat din config.json.", "ok");
       }catch(err){
-        setError(err.message || String(err));
+        console.error(err);
+        setStatus("Nu pot încărca config.json. Verifică dacă există lângă index.html și rulezi din http(s).", "err");
       }
     });
 
-    // ====== Buttons ======
+    // buttons
     document.getElementById('resetBtn').addEventListener('click', resetView);
-    document.getElementById('autoBtn').addEventListener('click', ()=>{ autoRotate = true; });
-    document.getElementById('stopBtn').addEventListener('click', ()=>{ autoRotate = false; });
+
+    document.getElementById('autoBtn').addEventListener('click', ()=>{
+      autoRotate = true;
+      setStatus("Auto-rotate: ON", "ok");
+    });
+
+    document.getElementById('stopBtn').addEventListener('click', ()=>{
+      autoRotate = false;
+      setStatus("Auto-rotate: OFF", "ok");
+    });
 
     // ====== Render loop ======
     function animate(){
       requestAnimationFrame(animate);
-      if(autoRotate){
-        yaw -= 0.0015;
-        applyCamera();
+
+      if(autoRotate && !isUserInteracting){
+        lon += autoRotateSpeed;
       }
+
+      lat = Math.max(-85, Math.min(85, lat));
+      phi = THREE.MathUtils.degToRad(90 - lat);
+      theta = THREE.MathUtils.degToRad(lon);
+
+      const x = 500 * Math.sin(phi) * Math.cos(theta);
+      const y = 500 * Math.cos(phi);
+      const z = 500 * Math.sin(phi) * Math.sin(theta);
+
+      camera.lookAt(x, y, z);
       renderer.render(scene, camera);
     }
-    applyCamera();
     animate();
 
-    // (opțional) încearcă auto-load pano1.jpg doar pe server:
-    // dacă vrei să pornească automat, decomentează:
-    // if(location.protocol !== 'file:'){
-    //   document.getElementById('loadDefaultBtn').click();
-    // }
+    // ====== Auto-load support ======
+    // 1) Dacă există ?pano=... sau ?json=... în URL, încarcă automat (perfect pentru github.io)
+    // Ex: https://user.github.io/site/index.html?pano=pano1.jpg
+    // Ex: https://user.github.io/site/index.html?json=config.json
+    (async function bootAuto(){
+      try{
+        const q = new URLSearchParams(location.search);
+        const json = q.get("json");
+        const pano = q.get("pano");
+        if(json){
+          setStatus(`Auto: încarc JSON: ${json} …`);
+          await loadFromJsonURL(json);
+          return;
+        }
+        if(pano){
+          setStatus(`Auto: încarc pano: ${pano} …`);
+          const img = await imageFromURL(pano);
+          await loadPanoramaFromImage(img, pano);
+          return;
+        }
+
+        // 2) Dacă nu e parametrizat, încearcă pano1.jpg implicit (merge și pe file:// dacă există local)
+        // (Dacă nu există, doar afișăm "aștept o imagine…", fără să stricăm restul.)
+        try{
+          const img = await imageFromURL('pano1.jpg');
+          await loadPanoramaFromImage(img, 'pano1.jpg');
+          setStatus("Încărcat automat pano1.jpg ✅", "ok");
+        }catch(_){
+          setStatus("Aștept o imagine… (poți încărca manual sau folosi pano1.jpg/config.json)", "info");
+        }
+      }catch(err){
+        console.error(err);
+        setStatus("Auto-load a eșuat. Încarcă manual o imagine.", "err");
+      }
+    })();
   </script>
 </body>
 </html>
