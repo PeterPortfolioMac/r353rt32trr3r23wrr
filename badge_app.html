@@ -6,8 +6,12 @@
     <title>PDF Badge Generator</title>
     <!-- pdf-lib for PDF manipulation -->
     <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+    <!-- fontkit for custom font embedding -->
+    <script src="https://unpkg.com/@pdf-lib/fontkit@1.1.1/dist/fontkit.umd.min.js"></script>
     <!-- PapaParse for robust CSV parsing -->
     <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+    <!-- SheetJS for Excel (XLS/XLSX) file parsing -->
+    <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
         /* CSS Reset & Variables */
         *, *::before, *::after {
@@ -478,7 +482,7 @@
         <!-- Header -->
         <header class="header">
             <h1>PDF Badge Generator</h1>
-            <p>Fill PDF form fields from CSV data - works entirely in your browser</p>
+            <p>Fill PDF form fields from CSV or Excel data - works entirely in your browser</p>
         </header>
 
         <!-- Cards Grid -->
@@ -515,6 +519,21 @@
                 </div>
 
                 <div id="pdfStatus" class="status hidden" data-testid="pdf-status"></div>
+                
+                <!-- Required: Font upload for diacritics -->
+                <div style="margin-top: 16px; padding: 12px; background: #fffbeb; border: 1px solid #fbbf24; border-radius: 8px;">
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9rem; color: #92400e; cursor: pointer; font-weight: 500;">
+                        <input type="file" id="fontInput" accept=".ttf,.otf" style="display: none;" data-testid="font-input">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 7V4h16v3"></path>
+                            <path d="M9 20h6"></path>
+                            <path d="M12 4v16"></path>
+                        </svg>
+                        <span>Click to upload font (.ttf/.otf) - Required for diacritics</span>
+                    </label>
+                    <p style="margin-top: 6px; font-size: 0.8rem; color: #a16207;">Recommended: Roboto, Arial, or any Unicode font</p>
+                    <div id="fontStatus" class="status hidden" style="margin-top: 8px;" data-testid="font-status"></div>
+                </div>
             </div>
 
             <!-- Card 2: CSV Upload -->
@@ -529,13 +548,13 @@
                         </svg>
                     </div>
                     <div>
-                        <h2 class="card-title">CSV Data</h2>
+                        <h2 class="card-title">CSV / Excel Data</h2>
                         <p class="card-subtitle">Columns: Text1, Text2</p>
                     </div>
                 </div>
 
                 <div class="upload-zone" id="csvUploadZone" data-testid="csv-upload-zone">
-                    <input type="file" id="csvInput" accept=".csv" data-testid="csv-input">
+                    <input type="file" id="csvInput" accept=".csv,.xls,.xlsx" data-testid="csv-input">
                     <div class="upload-icon">
                         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -544,7 +563,7 @@
                         </svg>
                     </div>
                     <p class="upload-text"><strong>Click to upload</strong> or drag and drop</p>
-                    <p class="upload-hint">CSV file with header row</p>
+                    <p class="upload-hint">CSV, XLS, or XLSX file with header row</p>
                 </div>
 
                 <div id="csvStatus" class="status hidden" data-testid="csv-status"></div>
@@ -658,11 +677,54 @@
             pdfDoc: null,           // PDFDocument object from pdf-lib
             csvData: [],            // Parsed CSV rows [{Text1, Text2}, ...]
             generatedPdf: null,     // Uint8Array of the generated PDF
+            unicodeFont: null,      // Cached Unicode font (Noto Sans)
             isValid: {
                 pdf: false,
                 csv: false
             }
         };
+
+        // Font URLs with CORS support - NimbusSans has good Unicode/diacritics support
+        const FONT_URLS = [
+            'https://cdn.jsdelivr.net/gh/ArtifexSoftware/urw-base35-fonts@master/fonts/NimbusSans-Regular.otf',
+            'https://cdn.jsdelivr.net/gh/ArtifexSoftware/urw-base35-fonts@master/fonts/NimbusRoman-Regular.otf',
+            'https://cdn.jsdelivr.net/npm/@fontsource/roboto@5.0.8/files/roboto-latin-ext-400-normal.woff2'
+        ];
+
+        /**
+         * Load and cache Unicode font for PDF embedding
+         */
+        async function loadUnicodeFont() {
+            // If user already uploaded a font, use that
+            if (state.unicodeFont) {
+                console.log('Using user-provided font');
+                return state.unicodeFont;
+            }
+            
+            // Try to load from CDN
+            for (const url of FONT_URLS) {
+                try {
+                    console.log('Attempting to load font from:', url);
+                    const response = await fetch(url, { 
+                        mode: 'cors',
+                        cache: 'force-cache'
+                    });
+                    if (response.ok) {
+                        const buffer = await response.arrayBuffer();
+                        if (buffer.byteLength > 1000) { // Sanity check
+                            console.log('Successfully loaded font, size:', buffer.byteLength);
+                            state.unicodeFont = buffer;
+                            return state.unicodeFont;
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Could not load font from', url, ':', e.message);
+                }
+            }
+            
+            console.warn('Could not load any Unicode font from CDN');
+            return null;
+        }
 
         // ============================================================
         // DOM Elements
@@ -672,6 +734,8 @@
             pdfUploadZone: document.getElementById('pdfUploadZone'),
             pdfInput: document.getElementById('pdfInput'),
             pdfStatus: document.getElementById('pdfStatus'),
+            fontInput: document.getElementById('fontInput'),
+            fontStatus: document.getElementById('fontStatus'),
 
             // CSV Upload
             csvUploadZone: document.getElementById('csvUploadZone'),
@@ -850,11 +914,16 @@
         // ============================================================
 
         /**
-         * Handle CSV file upload
+         * Handle CSV/Excel file upload
+         * Supports: CSV, XLS, XLSX with proper Unicode/diacritics handling
          */
         async function handleCsvUpload(file) {
-            if (!file || !file.name.toLowerCase().endsWith('.csv')) {
-                showStatus(elements.csvStatus, 'Please upload a valid CSV file', 'error');
+            const fileName = file.name.toLowerCase();
+            const isCSV = fileName.endsWith('.csv');
+            const isExcel = fileName.endsWith('.xls') || fileName.endsWith('.xlsx');
+
+            if (!file || (!isCSV && !isExcel)) {
+                showStatus(elements.csvStatus, 'Please upload a valid CSV, XLS, or XLSX file', 'error');
                 elements.csvUploadZone.classList.add('error');
                 elements.csvUploadZone.classList.remove('success');
                 state.isValid.csv = false;
@@ -867,22 +936,53 @@
             }
 
             try {
-                const text = await file.text();
-                
-                // Parse CSV using PapaParse
-                const result = Papa.parse(text, {
-                    header: true,
-                    skipEmptyLines: true,
-                    transformHeader: (header) => header.trim(),
-                    transform: (value) => value.trim()
-                });
+                let parsedData = [];
+                let headers = [];
 
-                if (result.errors.length > 0) {
-                    console.warn('CSV parsing warnings:', result.errors);
+                if (isExcel) {
+                    // Parse Excel file using SheetJS
+                    const arrayBuffer = await file.arrayBuffer();
+                    const workbook = XLSX.read(arrayBuffer, { 
+                        type: 'array',
+                        codepage: 65001,  // UTF-8
+                        raw: false
+                    });
+                    
+                    // Get first sheet
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    
+                    // Convert to JSON with header row
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, {
+                        defval: '',
+                        raw: false
+                    });
+                    
+                    if (jsonData.length > 0) {
+                        headers = Object.keys(jsonData[0]);
+                        parsedData = jsonData;
+                    }
+                } else {
+                    // Parse CSV with UTF-8 encoding
+                    const text = await file.text();
+                    
+                    const result = Papa.parse(text, {
+                        header: true,
+                        skipEmptyLines: true,
+                        transformHeader: (header) => header.trim(),
+                        transform: (value) => value.trim(),
+                        encoding: 'UTF-8'
+                    });
+
+                    if (result.errors.length > 0) {
+                        console.warn('CSV parsing warnings:', result.errors);
+                    }
+
+                    headers = result.meta.fields || [];
+                    parsedData = result.data;
                 }
 
                 // Validate columns
-                const headers = result.meta.fields || [];
                 const hasText1Col = headers.includes('Text1');
                 const hasText2Col = headers.includes('Text2');
 
@@ -900,12 +1000,14 @@
                     elements.rowCount.classList.add('hidden');
                 } else {
                     // Filter out rows where both Text1 and Text2 are empty
-                    const validRows = result.data.filter(row => 
-                        (row.Text1 && row.Text1.length > 0) || (row.Text2 && row.Text2.length > 0)
-                    );
+                    const validRows = parsedData.filter(row => {
+                        const t1 = String(row.Text1 || '').trim();
+                        const t2 = String(row.Text2 || '').trim();
+                        return t1.length > 0 || t2.length > 0;
+                    });
 
                     if (validRows.length === 0) {
-                        showStatus(elements.csvStatus, 'CSV file contains no valid data rows', 'error');
+                        showStatus(elements.csvStatus, 'File contains no valid data rows', 'error');
                         elements.csvUploadZone.classList.add('error');
                         elements.csvUploadZone.classList.remove('success');
                         state.isValid.csv = false;
@@ -914,11 +1016,12 @@
                         elements.rowCount.classList.add('hidden');
                     } else {
                         state.csvData = validRows.map(row => ({
-                            Text1: row.Text1 || '',
-                            Text2: row.Text2 || ''
+                            Text1: String(row.Text1 || '').trim(),
+                            Text2: String(row.Text2 || '').trim()
                         }));
 
-                        showStatus(elements.csvStatus, `CSV loaded: ${file.name}`, 'success');
+                        const fileType = isExcel ? 'Excel' : 'CSV';
+                        showStatus(elements.csvStatus, `${fileType} loaded: ${file.name}`, 'success');
                         elements.csvUploadZone.classList.add('success');
                         elements.csvUploadZone.classList.remove('error');
                         state.isValid.csv = true;
@@ -929,8 +1032,8 @@
                 }
 
             } catch (error) {
-                console.error('CSV loading error:', error);
-                showStatus(elements.csvStatus, `Error loading CSV: ${error.message}`, 'error');
+                console.error('File loading error:', error);
+                showStatus(elements.csvStatus, `Error loading file: ${error.message}`, 'error');
                 elements.csvUploadZone.classList.add('error');
                 elements.csvUploadZone.classList.remove('success');
                 state.isValid.csv = false;
@@ -979,6 +1082,7 @@
 
         /**
          * Generate the filled PDF
+         * Uses direct text drawing instead of form fields for reliable Unicode support
          */
         async function generatePdf() {
             if (!state.isValid.pdf || !state.isValid.csv || state.csvData.length === 0) {
@@ -995,11 +1099,43 @@
             try {
                 // Create a new PDF document for the output
                 const outputPdf = await PDFLib.PDFDocument.create();
+                outputPdf.registerFontkit(fontkit);
+                
                 const totalRows = state.csvData.length;
 
                 // Update progress
                 elements.progressText.textContent = `Preparing template...`;
                 elements.progressFill.style.width = '0%';
+
+                // Pre-load Unicode font for diacritics support
+                elements.progressText.textContent = `Loading Unicode font...`;
+                const fontBytes = await loadUnicodeFont();
+                
+                if (!fontBytes) {
+                    throw new Error('Could not load Unicode font. Please upload a TTF/OTF font file manually.');
+                }
+
+                // Embed font in output document once
+                const customFont = await outputPdf.embedFont(fontBytes, { subset: true });
+                console.log('Font embedded successfully');
+
+                // Get field positions from the template
+                const templateDoc = await PDFLib.PDFDocument.load(state.pdfTemplate);
+                templateDoc.registerFontkit(fontkit);
+                const form = templateDoc.getForm();
+                const text1Field = form.getTextField('Text1');
+                const text2Field = form.getTextField('Text2');
+                
+                // Get widget annotations to find field positions
+                const text1Widgets = text1Field.acroField.getWidgets();
+                const text2Widgets = text2Field.acroField.getWidgets();
+                
+                // Get rectangle (position) of each field
+                const text1Rect = text1Widgets[0].getRectangle();
+                const text2Rect = text2Widgets[0].getRectangle();
+                
+                console.log('Text1 field position:', text1Rect);
+                console.log('Text2 field position:', text2Rect);
 
                 // Process each row
                 for (let i = 0; i < totalRows; i++) {
@@ -1010,64 +1146,46 @@
                     elements.progressFill.style.width = `${progress}%`;
                     elements.progressText.textContent = `Generating page ${i + 1} of ${totalRows}...`;
 
-                    // Load a fresh copy of the template for each row
+                    // Load a fresh copy of the template and flatten form fields
                     const templateCopy = await PDFLib.PDFDocument.load(state.pdfTemplate);
-                    const form = templateCopy.getForm();
+                    templateCopy.registerFontkit(fontkit);
+                    
+                    // Flatten form to remove interactive fields (they become static)
+                    const formCopy = templateCopy.getForm();
+                    formCopy.flatten();
 
-                    // Get the text fields
-                    const text1Field = form.getTextField('Text1');
-                    const text2Field = form.getTextField('Text2');
-
-                    // Set field values
-                    text1Field.setText(row.Text1);
-                    text2Field.setText(row.Text2);
-					
-					form.flatten();
-
-                    // Set default appearance for Helvetica font size 13
-                    // pdf-lib uses setFontSize and standard fonts
-                    try {
-                        const helvetica = await templateCopy.embedFont(PDFLib.StandardFonts.Helvetica);
-                        text1Field.setFontSize(13);
-                        text2Field.setFontSize(13);
-                        
-                        // Update field appearances to render the text
-                        text1Field.updateAppearances(helvetica);
-                        text2Field.updateAppearances(helvetica);
-                    } catch (fontError) {
-                        console.warn('Font styling warning:', fontError);
-                        // Continue without custom font settings if there's an issue
-                    }
-
-                    // Copy all pages from this filled template to the output document
-                    const pages = await outputPdf.copyPages(templateCopy, templateCopy.getPageIndices());
-                    pages.forEach(page => outputPdf.addPage(page));
-
-                    // Also copy the AcroForm fields
-                    // Note: When copying pages, we need to recreate form fields for each page
-                    // This is a limitation of pdf-lib - we need to handle fields separately
+                    // Copy pages to output
+                    const [copiedPage] = await outputPdf.copyPages(templateCopy, [0]);
+                    outputPdf.addPage(copiedPage);
+                    
+                    // Get the page we just added
+                    const page = outputPdf.getPage(outputPdf.getPageCount() - 1);
+                    
+                    // Draw text at field positions
+                    const fontSize = 13;
+                    const textColor = PDFLib.rgb(0, 0, 0);
+                    
+                    // Draw Text1
+                    page.drawText(row.Text1, {
+                        x: text1Rect.x + 2,
+                        y: text1Rect.y + 4,
+                        size: fontSize,
+                        font: customFont,
+                        color: textColor
+                    });
+                    
+                    // Draw Text2
+                    page.drawText(row.Text2, {
+                        x: text2Rect.x + 2,
+                        y: text2Rect.y + 4,
+                        size: fontSize,
+                        font: customFont,
+                        color: textColor
+                    });
 
                     // Allow UI to update
                     await new Promise(resolve => setTimeout(resolve, 0));
                 }
-
-                // For keeping fields editable, we need a different approach
-                // Let's rebuild the form in the output document
-                // Since pdf-lib doesn't directly support copying form fields with pages,
-                // we'll use a workaround by modifying each template and then merging
-
-                // Actually, the simplest approach that keeps fields editable is to:
-                // 1. For each row, create a filled PDF
-                // 2. Merge them into one document using copyPages
-
-                // The current approach should work, but fields may not be individually editable
-                // per page in all viewers. Let's try a different approach.
-
-                // Alternative approach: Create pages with flattened appearance streams but
-                // also add form fields that point to each page. This is complex in pdf-lib.
-
-                // For now, let's ensure the basic generation works and fields are set.
-                // The output will have the text visible, though editing may vary by viewer.
 
                 // Save the output PDF
                 const pdfBytes = await outputPdf.save();
@@ -1082,12 +1200,12 @@
                 // Show download button
                 elements.downloadArea.classList.remove('hidden');
 
-                // Re-enable generate button (hidden but enabled for potential re-generation)
+                // Re-enable generate button
                 elements.generateBtn.disabled = false;
 
             } catch (error) {
                 console.error('PDF generation error:', error);
-                showStatus(elements.generateStatus, `Error generating PDF: ${error.message}`, 'error');
+                showStatus(elements.generateStatus, `Error: ${error.message}`, 'error');
                 
                 // Show generate button again
                 elements.actionArea.classList.remove('hidden');
@@ -1147,6 +1265,27 @@
         elements.csvInput.addEventListener('change', (e) => {
             resetGeneration();
             handleCsvUpload(e.target.files[0]);
+        });
+
+        // Custom font upload handler
+        elements.fontInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const ext = file.name.toLowerCase();
+            if (!ext.endsWith('.ttf') && !ext.endsWith('.otf')) {
+                showStatus(elements.fontStatus, 'Please upload a TTF or OTF font file', 'error');
+                return;
+            }
+            
+            try {
+                const buffer = await file.arrayBuffer();
+                state.unicodeFont = buffer;
+                showStatus(elements.fontStatus, `Font loaded: ${file.name}`, 'success');
+                console.log('Custom font loaded:', file.name, 'Size:', buffer.byteLength);
+            } catch (err) {
+                showStatus(elements.fontStatus, `Error loading font: ${err.message}`, 'error');
+            }
         });
 
         // Generate button
