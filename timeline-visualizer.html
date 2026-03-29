@@ -155,6 +155,8 @@
     flex-shrink: 0; transition: all .15s;
   }
   .label-del:hover { background: #3a1a1a; border-color: #b05555; color: #e05555; }
+  .track-label.dragging { opacity: .45; }
+  .track-label.drag-over { border-top: 2px solid var(--accent); background: rgba(91,124,250,.08); }
 
   /* Tracks scroll area */
   #tracks-scroll {
@@ -235,6 +237,90 @@
     width: 0; height: 0;
     border-left: 5px solid transparent; border-right: 5px solid transparent;
     border-top: 7px solid #ff4d6d;
+  }
+
+
+
+  /* Timeline range modes */
+  .tool-toggle {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 10px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--bg-tertiary); color: var(--text-primary); font-size: 12px;
+    cursor: pointer; transition: background .15s, border-color .15s, color .15s;
+    user-select: none;
+  }
+  .tool-toggle:hover { background: var(--bg-secondary); border-color: var(--accent); }
+  .tool-toggle.active { background: rgba(91,124,250,.12); border-color: var(--accent); color: var(--accent); }
+
+  #annotation-overlay {
+    position: absolute; inset: 0 auto auto 0; pointer-events: none; z-index: 12;
+  }
+  .annotation-range {
+    position: absolute; top: 0; height: 100%; border-radius: 8px;
+    pointer-events: auto; box-shadow: 0 2px 10px rgba(0,0,0,.25);
+  }
+  .annotation-range.selected { outline: 2px solid rgba(255,255,255,.85); outline-offset: -1px; }
+  .annotation-range .range-handle {
+    position: absolute; top: 0; width: 10px; height: 100%; cursor: ew-resize;
+  }
+  .annotation-range .range-handle.left { left: 0; }
+  .annotation-range .range-handle.right { right: 0; }
+
+  .section-range {
+    background: rgba(91,124,250,.15); border: 1px solid rgba(255,255,255,.12);
+    min-width: 18px; cursor: grab;
+  }
+  .section-range:active { cursor: grabbing; }
+  .section-chip {
+    position: absolute; top: 8px; left: 8px; right: 8px;
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 5px 8px; border-radius: 999px; background: rgba(0,0,0,.28);
+    color: #fff; font-size: 11px; font-weight: 700; letter-spacing: .02em;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    pointer-events: none;
+  }
+  .section-time {
+    font-family: 'Courier New', monospace; font-weight: 600; color: rgba(255,255,255,.82);
+  }
+
+  .note-range {
+    height: 44px; top: 6px; border-radius: 10px; min-width: 18px;
+    background: rgba(17,24,39,.96); border: 1px solid rgba(255,255,255,.18);
+    cursor: grab; overflow: hidden; z-index: 2;
+  }
+  .note-range:active { cursor: grabbing; }
+  .note-range::after {
+    content: ''; position: absolute; left: 8px; right: 8px; bottom: 5px; height: 3px;
+    border-radius: 999px; background: currentColor; opacity: .95;
+  }
+  .note-range .note-body {
+    position: absolute; inset: 0; display: flex; align-items: center;
+    padding: 5px 8px 10px; pointer-events: none; z-index: 1;
+  }
+  .note-range .note-chip {
+    max-width: 100%; display: inline-flex; align-items: center; gap: 8px;
+    min-height: 24px; padding: 4px 10px; border-radius: 999px;
+    background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.10);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.07);
+  }
+  .note-range .note-title {
+    font-size: 11px; font-weight: 700; color: #ffffff; text-shadow: 0 1px 2px rgba(0,0,0,.7);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto;
+  }
+  .note-range .note-text {
+    font-size: 10px; color: rgba(255,255,255,.88); text-shadow: 0 1px 2px rgba(0,0,0,.65);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1 1 auto;
+    min-width: 0; display: none;
+  }
+  .note-range.show-note-text .note-text { display: block; }
+  .note-range .note-time {
+    font-size: 10px; color: rgba(255,255,255,.86); text-shadow: 0 1px 2px rgba(0,0,0,.65);
+    font-family: 'Courier New', monospace; flex-shrink: 0;
+  }
+
+  #range-preview {
+    position: absolute; top: 0; height: 100%; display: none; pointer-events: none; z-index: 20;
+    border: 1px dashed rgba(255,255,255,.55); background: rgba(91,124,250,.12); border-radius: 8px;
   }
 
   /* ── Modals / Overlays ───────────────────────────── */
@@ -325,7 +411,7 @@
     </div>
     <div class="hdr-spacer"></div><!-- Import / Export / Add Layer --> <button class="btn" id="add-layer-btn">+ Layer</button> <button class="btn" id="export-btn"><span>Export</span> JSON</button> <button class="btn" id="import-btn"><span>Import</span> JSON</button> <input type="file" id="import-file" accept=".json" style="display:none">
    </header><!-- Toolbar -->
-   <div id="toolbar"><button id="play-btn" title="Play / Pause">▶</button> <span id="playhead-time">00:00:00</span> <span style="font-size:11px;color:var(--text-muted);margin-left:8px;"> Double-click empty track area to add a clip </span>
+   <div id="toolbar"><button id="play-btn" title="Play / Pause">▶</button> <span id="playhead-time">00:00:00</span> <button class="tool-toggle" id="add-section-btn" title="Draw a timeline section on the desired interval">+ Section</button> <button class="tool-toggle" id="add-note-btn" title="Draw a note on the desired interval">+ Note</button> <span style="font-size:11px;color:var(--text-muted);margin-left:8px;"> Double-click empty track area to add a clip · or use Section / Note then drag with the mouse on the desired interval </span>
    </div><!-- Timeline -->
    <div id="main">
     <div id="timeline-container"><!-- Ruler row -->
@@ -341,6 +427,8 @@
       <div id="tracks-scroll">
        <div id="tracks-inner">
         <canvas id="grid-canvas"></canvas>
+        <div id="annotation-overlay"></div>
+        <div id="range-preview"></div>
         <div id="playhead"></div><!-- track rows inserted here -->
        </div>
       </div>
@@ -369,8 +457,24 @@
     <div class="modal-actions"><button class="btn" id="clip-cancel-btn">Cancel</button> <button class="btn primary" id="clip-save-btn">Add Clip</button>
     </div>
    </div>
+  </div><!-- ══ RANGE ITEM MODAL ═══════════════════════════════ -->
+  <div class="modal-overlay hidden" id="range-modal">
+   <div class="modal">
+    <h2 id="range-modal-title">Add Section</h2>
+    <div class="form-row"><label for="range-name-input">Title</label> <input type="text" id="range-name-input" placeholder="Title…" maxlength="60">
+    </div>
+    <div class="form-row"><label for="range-color-input">Color</label> <input type="color" id="range-color-input" value="#5b7cfa">
+    </div>
+    <div class="form-row"><label for="range-note-input">Note</label> <input type="text" id="range-note-input" placeholder="Optional note…" maxlength="140">
+    </div>
+    <div class="modal-actions"><button class="btn" id="range-cancel-btn">Cancel</button> <button class="btn primary" id="range-save-btn">Save</button>
+    </div>
+   </div>
   </div><!-- ══ CONTEXT MENU ════════════════════════════════════ -->
   <div id="ctx-menu">
+   <div class="ctx-item" id="ctx-edit">
+    Edit
+   </div>
    <div class="ctx-item" id="ctx-rename">
     Rename Clip
    </div>
@@ -396,7 +500,11 @@ let state = {
   snapGrid: 5,     // seconds
   playheadTime: 0, // seconds
   isPlaying: false,
-  layers: []
+  layers: [],
+  sections: [],
+  notes: [],
+  layerOrder: [],
+  activeRangeTool: null
 };
 
 const BASE_PX_PER_SEC = 2; // at zoom=1, 1 second = 2px
@@ -435,6 +543,8 @@ const rulerCanvas  = document.getElementById('ruler-canvas');
 const rulerScrollW = document.getElementById('ruler-scroll-wrap');
 const gridCanvas   = document.getElementById('grid-canvas');
 const playheadEl   = document.getElementById('playhead');
+const annotationOverlay = document.getElementById('annotation-overlay');
+const rangePreview = document.getElementById('range-preview');
 const rulerPH      = document.getElementById('ruler-playhead');
 const playheadTime = document.getElementById('playhead-time');
 const playBtn      = document.getElementById('play-btn');
@@ -444,9 +554,65 @@ function timelineWidth() {
   return Math.max(state.duration * pxPerSec(), tracksScroll.clientWidth);
 }
 function totalTrackHeight() {
-  return state.layers.length * parseInt(getComputedStyle(document.documentElement).getPropertyValue('--track-h') || '48');
+  return getDisplayRows().length * parseInt(getComputedStyle(document.documentElement).getPropertyValue('--track-h') || '48');
 }
 const TRACK_H = () => parseInt(getComputedStyle(document.documentElement).getPropertyValue('--track-h')) || 48;
+
+const SPECIAL_ROWS = {
+  section: { key: '__sections__', kind: 'section', name: 'Sections', color: '#5b7cfa' },
+  note: { key: '__notes__', kind: 'note', name: 'Notes', color: '#eab308' }
+};
+
+function getLayerRowKey(layerId) {
+  return `layer:${layerId}`;
+}
+
+function ensureLayerOrder() {
+  const existingLayerKeys = state.layers.map(layer => getLayerRowKey(layer.id));
+  const allowedKeys = new Set([SPECIAL_ROWS.section.key, SPECIAL_ROWS.note.key, ...existingLayerKeys]);
+  const current = Array.isArray(state.layerOrder) ? state.layerOrder.filter(key => allowedKeys.has(key)) : [];
+  if (!current.includes(SPECIAL_ROWS.section.key)) current.unshift(SPECIAL_ROWS.section.key);
+  if (!current.includes(SPECIAL_ROWS.note.key)) {
+    const insertAt = current.includes(SPECIAL_ROWS.section.key) ? current.indexOf(SPECIAL_ROWS.section.key) + 1 : 0;
+    current.splice(insertAt, 0, SPECIAL_ROWS.note.key);
+  }
+  existingLayerKeys.forEach(key => {
+    if (!current.includes(key)) current.push(key);
+  });
+  state.layerOrder = current;
+}
+
+function getDisplayRows() {
+  ensureLayerOrder();
+  return state.layerOrder.map(key => {
+    if (key === SPECIAL_ROWS.section.key) return { ...SPECIAL_ROWS.section, deletable: false };
+    if (key === SPECIAL_ROWS.note.key) return { ...SPECIAL_ROWS.note, deletable: false };
+    const layerId = key.replace(/^layer:/, '');
+    const layerIdx = state.layers.findIndex(layer => layer.id === layerId);
+    if (layerIdx < 0) return null;
+    const layer = state.layers[layerIdx];
+    return {
+      key,
+      kind: 'layer',
+      id: layer.id,
+      layerIdx,
+      layer,
+      name: layer.name,
+      color: layer.color,
+      deletable: true
+    };
+  }).filter(Boolean);
+}
+
+function moveDisplayRow(dragKey, targetKey) {
+  if (!dragKey || !targetKey || dragKey === targetKey) return;
+  ensureLayerOrder();
+  const from = state.layerOrder.indexOf(dragKey);
+  const to = state.layerOrder.indexOf(targetKey);
+  if (from < 0 || to < 0) return;
+  const [moved] = state.layerOrder.splice(from, 1);
+  state.layerOrder.splice(to, 0, moved);
+}
 
 // ── Ruler ──────────────────────────────────────────────
 function drawRuler() {
@@ -596,57 +762,286 @@ function fullRender() {
   const w = timelineWidth();
   tracksInner.style.width  = w + 'px';
   tracksInner.style.minHeight = (totalTrackHeight() || 200) + 'px';
-  drawRuler(); drawGrid(); renderAllLayers(); updatePlayheadUI();
+  drawRuler(); drawGrid(); renderAllLayers(); renderAnnotations(); updatePlayheadUI();
 }
 
 // ── Layer rendering ────────────────────────────────────
+let draggedRowKey = null;
+
+function attachRowReorderHandlers(lbl, rowInfo) {
+  lbl.draggable = true;
+  lbl.addEventListener('dragstart', e => {
+    draggedRowKey = rowInfo.key;
+    lbl.classList.add('dragging');
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', rowInfo.key);
+    }
+  });
+  lbl.addEventListener('dragend', () => {
+    draggedRowKey = null;
+    [...labelsCol.querySelectorAll('.track-label')].forEach(node => {
+      node.classList.remove('dragging', 'drag-over');
+    });
+  });
+  lbl.addEventListener('dragover', e => {
+    e.preventDefault();
+    if (!draggedRowKey || draggedRowKey === rowInfo.key) return;
+    lbl.classList.add('drag-over');
+  });
+  lbl.addEventListener('dragleave', () => lbl.classList.remove('drag-over'));
+  lbl.addEventListener('drop', e => {
+    e.preventDefault();
+    lbl.classList.remove('drag-over');
+    if (!draggedRowKey || draggedRowKey === rowInfo.key) return;
+    moveDisplayRow(draggedRowKey, rowInfo.key);
+    fullRender();
+    showToast('Layer order updated');
+  });
+}
+
 function renderAllLayers() {
-  // Clear labels
+  ensureLayerOrder();
   labelsCol.innerHTML = '';
-  // Remove old track rows (not canvas or playhead)
   [...tracksInner.querySelectorAll('.track-row')].forEach(el => el.remove());
 
-  state.layers.forEach((layer, li) => {
-    // Label
+  getDisplayRows().forEach((rowInfo, visualIdx) => {
     const lbl = document.createElement('div');
     lbl.className = 'track-label';
-    lbl.dataset.layerIdx = li;
+    lbl.dataset.rowKey = rowInfo.key;
+    lbl.dataset.rowKind = rowInfo.kind;
+    attachRowReorderHandlers(lbl, rowInfo);
+
     const swatch = document.createElement('div');
     swatch.className = 'label-swatch';
-    swatch.style.background = layer.color;
+    swatch.style.background = rowInfo.color;
+
     const name = document.createElement('div');
     name.className = 'label-name';
-    name.textContent = layer.name;
-    name.title = 'Double-click to rename';
-    name.addEventListener('dblclick', () => openLayerModal(li));
-    const del = document.createElement('button');
-    del.className = 'label-del'; del.title = 'Delete layer'; del.textContent = '×';
-    del.addEventListener('click', () => deleteLayer(li));
-    lbl.append(swatch, name, del);
+    name.textContent = rowInfo.name;
+    if (rowInfo.kind === 'layer') {
+      name.title = 'Double-click to rename';
+      name.addEventListener('dblclick', () => openLayerModal(rowInfo.layerIdx));
+    } else {
+      name.title = rowInfo.kind === 'section' ? 'Special row for sections' : 'Special row for notes';
+    }
+
+    lbl.append(swatch, name);
+
+    if (rowInfo.deletable) {
+      const del = document.createElement('button');
+      del.className = 'label-del';
+      del.title = 'Delete layer';
+      del.textContent = '×';
+      del.addEventListener('click', () => deleteLayer(rowInfo.layerIdx));
+      lbl.appendChild(del);
+    } else {
+      const grip = document.createElement('div');
+      grip.className = 'label-del';
+      grip.style.cursor = 'grab';
+      grip.style.borderColor = 'transparent';
+      grip.style.background = 'transparent';
+      grip.style.color = 'var(--text-muted)';
+      grip.textContent = '⋮⋮';
+      grip.title = 'Drag to reorder';
+      lbl.appendChild(grip);
+    }
+
     labelsCol.appendChild(lbl);
 
-    // Track row
     const row = document.createElement('div');
     row.className = 'track-row';
-    row.dataset.layerIdx = li;
+    row.dataset.rowKey = rowInfo.key;
+    row.dataset.rowKind = rowInfo.kind;
     row.style.height = TRACK_H() + 'px';
-    // Double-click to add clip
-    row.addEventListener('dblclick', e => {
-      if (e.target.closest('.clip')) return;
-      const rect = row.getBoundingClientRect();
-      const x = e.clientX - rect.left + tracksScroll.scrollLeft;
-      const startSec = snap(clamp(x / pxPerSec(), 0, state.duration - 10));
-      pendingClip = { layerIdx: li, start: startSec, end: startSec + 10 };
-      openClipModal(layer.color, layer.name + ' clip');
-    });
-    // Render clips
-    layer.items.forEach(item => {
-      row.appendChild(createClipEl(item, layer, li));
-    });
+
+    if (rowInfo.kind === 'layer') {
+      row.dataset.layerIdx = rowInfo.layerIdx;
+      row.addEventListener('dblclick', e => {
+        if (e.target.closest('.clip')) return;
+        const rect = row.getBoundingClientRect();
+        const x = e.clientX - rect.left + tracksScroll.scrollLeft;
+        const startSec = snap(clamp(x / pxPerSec(), 0, state.duration - 10));
+        pendingClip = { layerIdx: rowInfo.layerIdx, start: startSec, end: startSec + 10 };
+        openClipModal(rowInfo.color, rowInfo.name + ' clip');
+      });
+      rowInfo.layer.items.forEach(item => {
+        row.appendChild(createClipEl(item, rowInfo.layer, rowInfo.layerIdx));
+      });
+    }
+
     tracksInner.appendChild(row);
   });
 
   updatePlayheadUI();
+}
+
+// ── Sections / Notes rendering ─────────────────────────
+function getAllRanges() {
+  return [...state.sections.map(item => ({ ...item, _kind: 'section' })), ...state.notes.map(item => ({ ...item, _kind: 'note' }))];
+}
+
+function renderAnnotations() {
+  [...tracksInner.querySelectorAll('.annotation-range')].forEach(el => el.remove());
+  const sectionRow = tracksInner.querySelector('.track-row[data-row-kind="section"]');
+  const noteRow = tracksInner.querySelector('.track-row[data-row-kind="note"]');
+  if (sectionRow) state.sections.forEach(item => sectionRow.appendChild(createRangeEl(item, 'section')));
+  if (noteRow) state.notes.forEach(item => noteRow.appendChild(createRangeEl(item, 'note')));
+}
+
+function createRangeEl(item, kind) {
+  const el = document.createElement('div');
+  el.className = `annotation-range ${kind}-range`;
+  el.dataset.kind = kind;
+  el.dataset.itemId = item.id;
+  el.style.left = (item.start * pxPerSec()) + 'px';
+  el.style.width = Math.max(18, (item.end - item.start) * pxPerSec()) + 'px';
+  if (item.color) {
+    if (kind === 'section') {
+      const rgb = hexToRgb(item.color) || { r: 91, g: 124, b: 250 };
+      el.style.background = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.16)`;
+      el.style.borderColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.55)`;
+    } else {
+      el.style.color = item.color;
+      el.style.boxShadow = `0 8px 20px rgba(0,0,0,.28), inset 0 0 0 1px ${item.color}33`;
+    }
+  }
+
+  const left = document.createElement('div');
+  left.className = 'range-handle left';
+  const right = document.createElement('div');
+  right.className = 'range-handle right';
+
+  if (kind === 'section') {
+    const chip = document.createElement('div');
+    chip.className = 'section-chip';
+    chip.innerHTML = `<span>${escapeHtml(item.name || 'Section')}</span><span class="section-time">${secToStr(item.start)}–${secToStr(item.end)}</span>`;
+    el.append(chip);
+  } else {
+    const body = document.createElement('div');
+    body.className = 'note-body';
+    const widthPx = Math.max(16, (item.end - item.start) * pxPerSec());
+    const noteTitle = escapeHtml(item.name || 'Note');
+    const noteText = escapeHtml(item.note || 'No details');
+    const noteTime = `${secToStr(item.start)}–${secToStr(item.end)}`;
+    body.innerHTML = `<div class="note-chip"><div class="note-title">${noteTitle}</div><div class="note-text">${noteText}</div><div class="note-time">${noteTime}</div></div>`;
+    if (widthPx >= 170) el.classList.add('show-note-text');
+    el.title = `${item.name || 'Note'}${item.note ? ' — ' + item.note : ''} (${noteTime})`;
+    el.append(body);
+  }
+
+  el.append(left, right);
+
+  el.addEventListener('mousedown', e => {
+    if (e.target.classList.contains('range-handle')) return;
+    e.preventDefault(); e.stopPropagation();
+    selectRange(kind, item.id);
+    startRangeDrag(e, item, kind, el);
+  });
+  left.addEventListener('mousedown', e => {
+    e.preventDefault(); e.stopPropagation();
+    selectRange(kind, item.id);
+    startRangeResize(e, item, kind, el, 'left');
+  });
+  right.addEventListener('mousedown', e => {
+    e.preventDefault(); e.stopPropagation();
+    selectRange(kind, item.id);
+    startRangeResize(e, item, kind, el, 'right');
+  });
+  el.addEventListener('dblclick', e => {
+    e.preventDefault(); e.stopPropagation();
+    openRangeModal(kind, item);
+  });
+  el.addEventListener('contextmenu', e => {
+    e.preventDefault(); e.stopPropagation();
+    openCtxMenu(e, item, null, null, el, kind);
+  });
+  if (selectedRange && selectedRange.kind === kind && selectedRange.id === item.id) el.classList.add('selected');
+  return el;
+}
+
+function selectRange(kind, id) {
+  selectedRange = { kind, id };
+  renderAnnotations();
+}
+
+function getRangeStore(kind) {
+  return kind === 'section' ? state.sections : state.notes;
+}
+
+function startRangeDrag(e, item, kind, el) {
+  const pps = pxPerSec();
+  const startX = e.clientX;
+  const origStart = item.start;
+  const origEnd = item.end;
+  const dur = origEnd - origStart;
+  let autoScrollId = null;
+  el.style.zIndex = 60;
+  function onMove(ev) {
+    const dx = ev.clientX - startX;
+    let newStart = snap(origStart + dx / pps);
+    newStart = clamp(newStart, 0, state.duration - dur);
+    item.start = newStart;
+    item.end = newStart + dur;
+    renderAnnotations();
+    const rect = tracksScroll.getBoundingClientRect();
+    const margin = 60;
+    if (ev.clientX < rect.left + margin) {
+      if (!autoScrollId) autoScrollId = setInterval(() => { tracksScroll.scrollLeft -= 8; }, 16);
+    } else if (ev.clientX > rect.right - margin) {
+      if (!autoScrollId) autoScrollId = setInterval(() => { tracksScroll.scrollLeft += 8; }, 16);
+    } else {
+      clearInterval(autoScrollId); autoScrollId = null;
+    }
+  }
+  function onUp() {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    clearInterval(autoScrollId);
+  }
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+}
+
+function startRangeResize(e, item, kind, el, side) {
+  const pps = pxPerSec();
+  const startX = e.clientX;
+  const origStart = item.start;
+  const origEnd = item.end;
+  function onMove(ev) {
+    const dx = ev.clientX - startX;
+    if (side === 'left') {
+      let ns = snap(origStart + dx / pps);
+      ns = clamp(ns, 0, item.end - 1);
+      item.start = ns;
+    } else {
+      let ne = snap(origEnd + dx / pps);
+      ne = clamp(ne, item.start + 1, state.duration);
+      item.end = ne;
+    }
+    renderAnnotations();
+  }
+  function onUp() {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+  }
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+}
+
+function hexToRgb(hex) {
+  if (!hex || typeof hex !== 'string') return null;
+  const normalized = hex.replace('#', '');
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return null;
+  return {
+    r: parseInt(normalized.slice(0, 2), 16),
+    g: parseInt(normalized.slice(2, 4), 16),
+    b: parseInt(normalized.slice(4, 6), 16)
+  };
+}
+
+function escapeHtml(v) {
+  return String(v ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 }
 
 // ── Clip element factory ───────────────────────────────
@@ -779,8 +1174,10 @@ function startClipResize(e, item, layer, layerIdx, el, side) {
 
 // ── Context menu ───────────────────────────────────────
 let ctxTarget = null;
-function openCtxMenu(e, item, layer, layerIdx, el) {
-  ctxTarget = { item, layer, layerIdx, el };
+let selectedRange = null;
+function openCtxMenu(e, item, layer, layerIdx, el, kind = 'clip') {
+  ctxTarget = { item, layer, layerIdx, el, kind };
+  document.getElementById('ctx-rename').textContent = kind === 'clip' ? 'Rename Clip' : 'Rename';
   const m = document.getElementById('ctx-menu');
   m.style.display = 'block';
   m.style.left = e.clientX + 'px';
@@ -794,32 +1191,51 @@ function openCtxMenu(e, item, layer, layerIdx, el) {
 }
 document.addEventListener('click', () => { document.getElementById('ctx-menu').style.display = 'none'; });
 
+document.getElementById('ctx-edit').addEventListener('click', () => {
+  if (!ctxTarget) return;
+  if (ctxTarget.kind === 'clip') openRenameModal(ctxTarget.item, ctxTarget.el);
+  else openRangeModal(ctxTarget.kind, ctxTarget.item);
+});
+
 document.getElementById('ctx-rename').addEventListener('click', () => {
   if (!ctxTarget) return;
-  const newName = prompt_inline('Rename clip', ctxTarget.item.name);
-  // use a simple overlay-free approach: we'll use a custom inline rename
-  // (We can't use prompt — use a quick modal trick)
+  if (ctxTarget.kind !== 'clip') {
+    openRangeModal(ctxTarget.kind, ctxTarget.item);
+    return;
+  }
   openRenameModal(ctxTarget.item, ctxTarget.el);
 });
 document.getElementById('ctx-color').addEventListener('click', () => {
   if (!ctxTarget) return;
   const inp = document.createElement('input');
-  inp.type = 'color'; inp.value = ctxTarget.item.color || ctxTarget.layer.color;
+  inp.type = 'color'; inp.value = ctxTarget.item.color || ctxTarget.layer?.color || '#5b7cfa';
   inp.style.position = 'fixed'; inp.style.opacity = '0'; inp.style.pointerEvents = 'none';
   document.body.appendChild(inp);
   inp.addEventListener('input', e => {
     ctxTarget.item.color = e.target.value;
-    ctxTarget.el.style.background = e.target.value;
+    if (ctxTarget.kind === 'clip') {
+      ctxTarget.el.style.background = e.target.value;
+    } else {
+      renderAnnotations();
+    }
   });
   inp.addEventListener('change', () => { document.body.removeChild(inp); });
   inp.click();
 });
 document.getElementById('ctx-delete').addEventListener('click', () => {
   if (!ctxTarget) return;
-  const { item, layer, el } = ctxTarget;
-  layer.items = layer.items.filter(i => i.id !== item.id);
-  el.remove();
-  showToast('Clip deleted');
+  const { item, layer, el, kind } = ctxTarget;
+  if (kind === 'clip') {
+    layer.items = layer.items.filter(i => i.id !== item.id);
+    el.remove();
+    showToast('Clip deleted');
+  } else {
+    const store = getRangeStore(kind);
+    const idx = store.findIndex(i => i.id === item.id);
+    if (idx >= 0) store.splice(idx, 1);
+    renderAnnotations();
+    showToast(kind === 'section' ? 'Section deleted' : 'Note deleted');
+  }
 });
 
 // Simple rename modal (reuse layer modal as rename)
@@ -882,7 +1298,9 @@ document.getElementById('layer-save-btn').addEventListener('click', () => {
     state.layers[editLayerIdx].color = color;
     fullRender();
   } else {
-    state.layers.push({ id: uid(), name, color, items: [] });
+    const newLayer = { id: uid(), name, color, items: [] };
+    state.layers.push(newLayer);
+    ensureLayerOrder();
     fullRender();
   }
   modal.classList.add('hidden');
@@ -908,7 +1326,8 @@ document.querySelectorAll('.modal-overlay').forEach(m => {
 
 // ── Delete Layer ───────────────────────────────────────
 function deleteLayer(idx) {
-  state.layers.splice(idx, 1);
+  const [removed] = state.layers.splice(idx, 1);
+  if (removed) state.layerOrder = state.layerOrder.filter(key => key !== getLayerRowKey(removed.id));
   fullRender();
   showToast('Layer deleted');
 }
@@ -939,6 +1358,124 @@ document.getElementById('clip-save-btn').addEventListener('click', () => {
   pendingClip = null;
   showToast('Clip added! Drag to reposition.');
 });
+
+// ── Section / Note tools ───────────────────────────────
+const toolButtons = {
+  section: document.getElementById('add-section-btn'),
+  note: document.getElementById('add-note-btn')
+};
+
+function setActiveRangeTool(kind) {
+  state.activeRangeTool = state.activeRangeTool === kind ? null : kind;
+  toolButtons.section.classList.toggle('active', state.activeRangeTool === 'section');
+  toolButtons.note.classList.toggle('active', state.activeRangeTool === 'note');
+}
+
+toolButtons.section.addEventListener('click', () => setActiveRangeTool('section'));
+toolButtons.note.addEventListener('click', () => setActiveRangeTool('note'));
+
+let pendingRange = null;
+function openRangeModal(kind, item = null) {
+  pendingRange = item ? { ...item, _editingId: item.id } : pendingRange;
+  const editing = !!item;
+  document.getElementById('range-modal-title').textContent = `${editing ? 'Edit' : 'Add'} ${kind === 'section' ? 'Section' : 'Note'}`;
+  document.getElementById('range-name-input').value = pendingRange?.name || (kind === 'section' ? 'Section' : 'Note');
+  document.getElementById('range-color-input').value = pendingRange?.color || randomColor();
+  document.getElementById('range-note-input').value = pendingRange?.note || '';
+  document.getElementById('range-note-input').parentElement.style.display = kind === 'note' ? 'flex' : 'none';
+  const modal = document.getElementById('range-modal');
+  modal.dataset.kind = kind;
+  modal.classList.remove('hidden');
+  document.getElementById('range-name-input').focus();
+  document.getElementById('range-name-input').select();
+}
+
+document.getElementById('range-cancel-btn').addEventListener('click', () => {
+  document.getElementById('range-modal').classList.add('hidden');
+  pendingRange = null;
+});
+document.getElementById('range-save-btn').addEventListener('click', () => {
+  const modal = document.getElementById('range-modal');
+  const kind = modal.dataset.kind;
+  if (!kind || !pendingRange) return;
+  const store = getRangeStore(kind);
+  const payload = {
+    id: pendingRange._editingId || uid(),
+    name: document.getElementById('range-name-input').value.trim() || (kind === 'section' ? 'Section' : 'Note'),
+    color: document.getElementById('range-color-input').value,
+    start: clamp(Math.min(pendingRange.start, pendingRange.end), 0, state.duration),
+    end: clamp(Math.max(pendingRange.start, pendingRange.end), 0, state.duration),
+    note: kind === 'note' ? document.getElementById('range-note-input').value.trim() : ''
+  };
+  if (payload.end <= payload.start) payload.end = Math.min(state.duration, payload.start + 1);
+  const existingIdx = store.findIndex(i => i.id === payload.id);
+  if (existingIdx >= 0) store[existingIdx] = payload;
+  else store.push(payload);
+  document.getElementById('range-modal').classList.add('hidden');
+  pendingRange = null;
+  renderAnnotations();
+  showToast(kind === 'section' ? 'Section saved' : 'Note saved');
+});
+['range-name-input', 'range-note-input'].forEach(id => {
+  document.getElementById(id).addEventListener('keydown', e => {
+    if (e.key === 'Enter' && id !== 'range-note-input') document.getElementById('range-save-btn').click();
+    if (e.key === 'Escape') document.getElementById('range-modal').classList.add('hidden');
+  });
+});
+
+(function enableRangeDrawing() {
+  let drawing = false;
+  let startSec = 0;
+  let drawingKind = null;
+  let drawingRow = null;
+  tracksInner.addEventListener('mousedown', e => {
+    if (!state.activeRangeTool) return;
+    if (e.button !== 0) return;
+    if (e.target.closest('.clip') || e.target.closest('.annotation-range') || e.target === rulerPH) return;
+    const row = e.target.closest('.track-row');
+    if (!row || row.dataset.rowKind !== state.activeRangeTool) return;
+    drawing = true;
+    drawingKind = state.activeRangeTool;
+    drawingRow = row;
+    const rect = tracksInner.getBoundingClientRect();
+    const x = e.clientX - rect.left + tracksScroll.scrollLeft;
+    startSec = clamp(x / pxPerSec(), 0, state.duration);
+    const rowTop = row.offsetTop;
+    const left = startSec * pxPerSec();
+    rangePreview.style.display = 'block';
+    rangePreview.style.left = left + 'px';
+    rangePreview.style.width = '0px';
+    rangePreview.style.top = rowTop + 'px';
+    rangePreview.style.height = TRACK_H() + 'px';
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', e => {
+    if (!drawing || !drawingRow) return;
+    const rect = tracksInner.getBoundingClientRect();
+    const x = e.clientX - rect.left + tracksScroll.scrollLeft;
+    const currentSec = clamp(x / pxPerSec(), 0, state.duration);
+    const a = snap(Math.min(startSec, currentSec));
+    const b = snap(Math.max(startSec, currentSec));
+    rangePreview.style.left = (a * pxPerSec()) + 'px';
+    rangePreview.style.width = Math.max(2, (b - a) * pxPerSec()) + 'px';
+  });
+  document.addEventListener('mouseup', e => {
+    if (!drawing || !drawingRow) return;
+    drawing = false;
+    rangePreview.style.display = 'none';
+    const rect = tracksInner.getBoundingClientRect();
+    const x = e.clientX - rect.left + tracksScroll.scrollLeft;
+    const endSec = clamp(x / pxPerSec(), 0, state.duration);
+    let a = snap(Math.min(startSec, endSec));
+    let b = snap(Math.max(startSec, endSec));
+    if (b - a < 1) b = Math.min(state.duration, a + 5);
+    pendingRange = { start: a, end: b, color: randomColor(), name: drawingKind === 'section' ? 'Section' : 'Note', note: '' };
+    const kind = drawingKind;
+    drawingKind = null;
+    drawingRow = null;
+    openRangeModal(kind, null);
+  });
+})();
 
 // ── Duration ───────────────────────────────────────────
 function readDuration() {
@@ -1000,6 +1537,8 @@ document.getElementById('export-btn').addEventListener('click', () => {
   const data = {
     duration: state.duration,
     zoom: state.zoom,
+    sections: state.sections,
+    notes: state.notes,
     layers: state.layers.map(l => ({
       id: l.id, name: l.name, color: l.color,
       items: l.items.map(it => ({ id: it.id, name: it.name, start: it.start, end: it.end, color: it.color || null }))
@@ -1025,6 +1564,10 @@ document.getElementById('import-file').addEventListener('change', e => {
       if (typeof data.duration === 'number') state.duration = data.duration;
       if (typeof data.zoom     === 'number') state.zoom     = data.zoom;
       if (Array.isArray(data.layers)) state.layers = data.layers;
+      state.layerOrder = Array.isArray(data.layerOrder) ? data.layerOrder : [];
+      if (Array.isArray(data.sections)) state.sections = data.sections; else state.sections = [];
+      if (Array.isArray(data.notes)) state.notes = data.notes; else state.notes = [];
+      ensureLayerOrder();
       // Restore dur inputs
       const h = Math.floor(state.duration / 3600);
       const m = Math.floor((state.duration % 3600) / 60);
@@ -1058,38 +1601,12 @@ window.addEventListener('resize', () => fullRender());
 
 // ── Init ───────────────────────────────────────────────
 function init() {
-  // Seed with sample data
-  state.layers = [
-    {
-      id: uid(), name: 'Video', color: '#5b7cfa',
-      items: [
-        { id: uid(), name: 'Intro', start: 0,  end: 30, color: '#5b7cfa' },
-        { id: uid(), name: 'Scene A', start: 35, end: 90, color: '#4a68e0' },
-        { id: uid(), name: 'Outro', start: 240, end: 300, color: '#6b8cff' },
-      ]
-    },
-    {
-      id: uid(), name: 'Audio', color: '#22c55e',
-      items: [
-        { id: uid(), name: 'Narration', start: 0,  end: 120, color: '#22c55e' },
-        { id: uid(), name: 'Music', start: 100, end: 300, color: '#16a34a' },
-      ]
-    },
-    {
-      id: uid(), name: 'Titles', color: '#f97316',
-      items: [
-        { id: uid(), name: 'Title Card', start: 5,  end: 20, color: '#f97316' },
-        { id: uid(), name: 'Lower Third', start: 40, end: 60, color: '#ea6a0a' },
-      ]
-    },
-    {
-      id: uid(), name: 'Effects', color: '#a855f7',
-      items: [
-        { id: uid(), name: 'Fade In',  start: 0,  end: 5,  color: '#a855f7' },
-        { id: uid(), name: 'Fade Out', start: 295, end: 300, color: '#9333ea' },
-      ]
-    },
-  ];
+  // Start empty (no demo layers)
+  state.layers = [];
+
+  // Reset playhead
+  state.playheadTime = 0;
+
   fullRender();
 }
 
