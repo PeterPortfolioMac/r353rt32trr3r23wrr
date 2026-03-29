@@ -1,0 +1,1109 @@
+<!doctype html>
+<html lang="en" class="h-full">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Timeline Visualizer</title>
+  <script src="/_sdk/element_sdk.js"></script>
+  <style>
+  /* ── Reset & Base ────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; background: #0e0f14; color: #c9cdd4; overflow: hidden; }
+
+  /* ── CSS Variables ───────────────────────────────── */
+  :root {
+    --bg-primary:   #0e0f14;
+    --bg-secondary: #161820;
+    --bg-tertiary:  #1d1f2a;
+    --bg-panel:     #12131a;
+    --border:       #2a2d3a;
+    --accent:       #5b7cfa;
+    --accent-hover: #7a96ff;
+    --text-primary: #e0e3ec;
+    --text-muted:   #6b7280;
+    --track-h:      48px;
+    --label-w:      160px;
+    --ruler-h:      36px;
+    --header-h:     56px;
+  }
+
+  /* ── Layout ──────────────────────────────────────── */
+  #app { display: flex; flex-direction: column; height: 100%; width: 100%; }
+
+  /* Header */
+  #header {
+    height: var(--header-h);
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px;
+    padding: 0 16px; flex-shrink: 0;
+  }
+  #header h1 { font-size: 15px; font-weight: 700; color: var(--accent); letter-spacing: .5px; margin-right: 8px; }
+  .hdr-sep { width: 1px; height: 22px; background: var(--border); margin: 0 6px; }
+
+  /* Duration inputs */
+  .dur-group { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); }
+  .dur-group label { white-space: nowrap; }
+  .dur-input {
+    width: 50px; background: var(--bg-tertiary); border: 1px solid var(--border);
+    color: var(--text-primary); font-size: 12px; text-align: center;
+    padding: 4px 6px; border-radius: 5px; outline: none;
+    transition: border-color .15s;
+  }
+  .dur-input:focus { border-color: var(--accent); }
+
+  /* Zoom */
+  .zoom-group { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-muted); }
+  #zoom-out, #zoom-in {
+    width: 26px; height: 26px; border-radius: 5px; border: 1px solid var(--border);
+    background: var(--bg-tertiary); color: var(--text-primary); cursor: pointer;
+    font-size: 16px; line-height: 1; display: flex; align-items: center; justify-content: center;
+    transition: background .15s;
+  }
+  #zoom-out:hover, #zoom-in:hover { background: var(--bg-secondary); border-color: var(--accent); }
+  #zoom-label { min-width: 38px; text-align: center; font-size: 12px; color: var(--text-primary); }
+
+  /* Snap + Play */
+  .snap-toggle {
+    display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-muted); cursor: pointer;
+    padding: 4px 8px; border-radius: 5px; border: 1px solid var(--border);
+    background: var(--bg-tertiary); transition: background .15s, border-color .15s;
+    user-select: none;
+  }
+  .snap-toggle.active { border-color: var(--accent); color: var(--accent); background: rgba(91,124,250,.12); }
+  .snap-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+
+  .btn {
+    padding: 5px 12px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--bg-tertiary); color: var(--text-primary); font-size: 12px;
+    cursor: pointer; transition: background .15s, border-color .15s; white-space: nowrap;
+  }
+  .btn:hover { background: var(--bg-secondary); border-color: var(--accent); color: var(--accent); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: #fff; }
+
+  .hdr-spacer { flex: 1; }
+
+  /* ── Main Area ───────────────────────────────────── */
+  #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
+
+  /* Toolbar below header */
+  #toolbar {
+    height: 40px; background: var(--bg-panel); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px; padding: 0 12px; flex-shrink: 0;
+  }
+
+  /* Play button */
+  #play-btn {
+    width: 30px; height: 30px; border-radius: 50%; border: none;
+    background: var(--accent); color: #fff; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; font-size: 12px;
+    flex-shrink: 0; transition: background .15s;
+  }
+  #play-btn:hover { background: var(--accent-hover); }
+  #playhead-time { font-size: 12px; font-family: 'Courier New', monospace; color: var(--accent); min-width: 70px; }
+
+  /* ── Timeline Container ──────────────────────────── */
+  #timeline-container {
+    flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0;
+  }
+
+  /* Ruler row */
+  #ruler-row {
+    display: flex; flex-shrink: 0; height: var(--ruler-h);
+    border-bottom: 1px solid var(--border); background: var(--bg-panel);
+  }
+  #ruler-label-spacer {
+    width: var(--label-w); flex-shrink: 0;
+    border-right: 1px solid var(--border);
+  }
+  #ruler-scroll-wrap {
+    flex: 1; overflow: hidden; position: relative;
+  }
+  #ruler-canvas {
+    position: absolute; top: 0; left: 0; height: 100%;
+    display: block;
+  }
+
+  /* Tracks area */
+  #tracks-area {
+    flex: 1; display: flex; overflow: hidden; min-height: 0; position: relative;
+  }
+
+  /* Label column */
+  #labels-col {
+    width: var(--label-w); flex-shrink: 0;
+    background: var(--bg-panel); border-right: 1px solid var(--border);
+    overflow: hidden; display: flex; flex-direction: column;
+  }
+  .track-label {
+    height: var(--track-h); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px;
+    padding: 0 10px; flex-shrink: 0;
+  }
+  .label-swatch { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+  .label-name {
+    font-size: 12px; font-weight: 600; color: var(--text-primary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1;
+    cursor: pointer;
+  }
+  .label-name:hover { color: var(--accent); }
+  .label-del {
+    width: 18px; height: 18px; border-radius: 4px; background: transparent;
+    border: 1px solid transparent; color: var(--text-muted); cursor: pointer;
+    font-size: 13px; line-height: 1; display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; transition: all .15s;
+  }
+  .label-del:hover { background: #3a1a1a; border-color: #b05555; color: #e05555; }
+
+  /* Tracks scroll area */
+  #tracks-scroll {
+    flex: 1; overflow: auto; position: relative; cursor: default;
+  }
+  /* Custom scrollbar */
+  #tracks-scroll::-webkit-scrollbar { height: 8px; width: 8px; }
+  #tracks-scroll::-webkit-scrollbar-track { background: var(--bg-secondary); }
+  #tracks-scroll::-webkit-scrollbar-thumb { background: #3a3e52; border-radius: 4px; }
+  #tracks-scroll::-webkit-scrollbar-thumb:hover { background: #4a4f6a; }
+
+  /* Inner canvas */
+  #tracks-inner {
+    position: relative; min-height: 100%;
+    background: var(--bg-secondary);
+  }
+  /* Grid lines */
+  #grid-canvas {
+    position: absolute; top: 0; left: 0; pointer-events: none;
+  }
+
+  /* Individual track row */
+  .track-row {
+    height: var(--track-h); border-bottom: 1px solid var(--border);
+    position: relative; overflow: visible;
+  }
+  .track-row:nth-child(odd) { background: rgba(255,255,255,.015); }
+
+  /* Clip */
+  .clip {
+    position: absolute; top: 5px; height: calc(var(--track-h) - 10px);
+    border-radius: 6px; display: flex; align-items: center;
+    overflow: visible; cursor: grab; user-select: none;
+    box-shadow: 0 2px 8px rgba(0,0,0,.4);
+    transition: box-shadow .12s, filter .12s;
+    min-width: 16px;
+  }
+  .clip:active { cursor: grabbing; box-shadow: 0 4px 16px rgba(0,0,0,.6); filter: brightness(1.1); }
+  .clip.selected { outline: 2px solid #fff; outline-offset: 1px; }
+  .clip-body {
+    flex: 1; padding: 0 8px; font-size: 11px; font-weight: 600;
+    color: rgba(0,0,0,.75); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    pointer-events: none;
+  }
+  .clip-resize {
+    width: 8px; height: 100%; flex-shrink: 0;
+    cursor: ew-resize; display: flex; align-items: center; justify-content: center;
+    opacity: .6; transition: opacity .12s;
+    pointer-events: all;
+  }
+  .clip-resize:hover { opacity: 1; }
+  .clip-resize-left { border-radius: 6px 0 0 6px; position: absolute; left: 0; top: 0; }
+  .clip-resize-right { border-radius: 0 6px 6px 0; position: absolute; right: 0; top: 0; }
+  .clip-resize svg { width: 5px; height: 12px; }
+
+  /* Playhead */
+  #playhead {
+    position: absolute; top: 0; width: 2px; background: #ff4d6d;
+    pointer-events: none; z-index: 100;
+    box-shadow: 0 0 8px rgba(255,77,109,.7);
+    transition: none;
+  }
+  #playhead::before {
+    content: ''; position: absolute; top: -1px; left: 50%; transform: translateX(-50%);
+    width: 0; height: 0;
+    border-left: 6px solid transparent; border-right: 6px solid transparent;
+    border-top: 8px solid #ff4d6d;
+  }
+
+  /* Playhead on ruler */
+  #ruler-playhead {
+    position: absolute; top: 0; width: 2px; background: #ff4d6d;
+    pointer-events: all; cursor: ew-resize; z-index: 20;
+    box-shadow: 0 0 8px rgba(255,77,109,.7);
+  }
+  #ruler-playhead::after {
+    content: ''; position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
+    width: 0; height: 0;
+    border-left: 5px solid transparent; border-right: 5px solid transparent;
+    border-top: 7px solid #ff4d6d;
+  }
+
+  /* ── Modals / Overlays ───────────────────────────── */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.65);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 500; backdrop-filter: blur(4px);
+  }
+  .modal-overlay.hidden { display: none; }
+  .modal {
+    background: var(--bg-tertiary); border: 1px solid var(--border);
+    border-radius: 10px; padding: 24px; min-width: 300px; max-width: 420px; width: 90%;
+    box-shadow: 0 16px 48px rgba(0,0,0,.6);
+  }
+  .modal h2 { font-size: 15px; font-weight: 700; color: var(--text-primary); margin-bottom: 16px; }
+  .form-row { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
+  .form-row label { font-size: 12px; color: var(--text-muted); }
+  .form-row input[type=text], .form-row input[type=color] {
+    background: var(--bg-secondary); border: 1px solid var(--border);
+    color: var(--text-primary); font-size: 13px; padding: 7px 10px; border-radius: 6px;
+    outline: none; width: 100%; transition: border-color .15s;
+  }
+  .form-row input[type=text]:focus { border-color: var(--accent); }
+  .form-row input[type=color] { height: 36px; padding: 3px 5px; cursor: pointer; }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }
+
+  /* Toast */
+  #toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: var(--bg-tertiary); border: 1px solid var(--border);
+    color: var(--text-primary); font-size: 13px; padding: 10px 18px;
+    border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,.5);
+    z-index: 600; opacity: 0; pointer-events: none;
+    transition: opacity .3s;
+  }
+  #toast.show { opacity: 1; }
+
+  /* Clip context menu */
+  #ctx-menu {
+    position: fixed; background: var(--bg-tertiary); border: 1px solid var(--border);
+    border-radius: 8px; padding: 5px 0; min-width: 150px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.5); z-index: 400;
+    font-size: 13px; display: none;
+  }
+  .ctx-item {
+    padding: 7px 14px; cursor: pointer; color: var(--text-primary);
+    transition: background .1s;
+  }
+  .ctx-item:hover { background: rgba(91,124,250,.15); color: var(--accent); }
+  .ctx-item.danger:hover { background: rgba(224,85,85,.12); color: #e05555; }
+  .ctx-sep { height: 1px; background: var(--border); margin: 4px 0; }
+
+  /* Add clip tooltip */
+  #add-clip-hint {
+    position: fixed; background: rgba(91,124,250,.9); color: #fff;
+    font-size: 11px; padding: 4px 8px; border-radius: 4px;
+    pointer-events: none; z-index: 300; display: none;
+    transform: translateY(-130%);
+  }
+
+  /* Scrollbar sync forced via JS */
+  .no-scrollbar { overflow: hidden !important; }
+
+  @media (max-width: 600px) {
+    :root { --label-w: 100px; --track-h: 44px; }
+    #header h1 { font-size: 13px; }
+    .dur-group label { display: none; }
+    .btn span { display: none; }
+  }
+</style>
+  <style>body { box-sizing: border-box; }</style>
+  <script src="https://cdn.tailwindcss.com/3.4.17" type="text/javascript"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js" type="text/javascript"></script>
+  <script src="/_sdk/data_sdk.js" type="text/javascript"></script>
+ </head>
+ <body><!-- ══ APP SHELL ══════════════════════════════════════ -->
+  <div id="app"><!-- Header -->
+   <header id="header">
+    <h1 id="app-title">⏱ Timeline Visualizer</h1>
+    <div class="hdr-sep"></div><!-- Duration -->
+    <div class="dur-group"><label>Duration:</label> <input class="dur-input" id="dur-h" type="number" min="0" max="99" value="0" title="Hours"> <span style="color:var(--text-muted)">h</span> <input class="dur-input" id="dur-m" type="number" min="0" max="59" value="5" title="Minutes"> <span style="color:var(--text-muted)">m</span> <input class="dur-input" id="dur-s" type="number" min="0" max="59" value="0" title="Seconds"> <span style="color:var(--text-muted)">s</span> <button class="btn" id="apply-dur">Apply</button>
+    </div>
+    <div class="hdr-sep"></div><!-- Zoom -->
+    <div class="zoom-group"><button id="zoom-out" title="Zoom out">−</button> <span id="zoom-label">100%</span> <button id="zoom-in" title="Zoom in">+</button>
+    </div>
+    <div class="hdr-sep"></div><!-- Snap -->
+    <div class="snap-toggle active" id="snap-btn" title="Toggle snap to grid"><span class="snap-dot"></span> Snap
+    </div>
+    <div class="hdr-spacer"></div><!-- Import / Export / Add Layer --> <button class="btn" id="add-layer-btn">+ Layer</button> <button class="btn" id="export-btn"><span>Export</span> JSON</button> <button class="btn" id="import-btn"><span>Import</span> JSON</button> <input type="file" id="import-file" accept=".json" style="display:none">
+   </header><!-- Toolbar -->
+   <div id="toolbar"><button id="play-btn" title="Play / Pause">▶</button> <span id="playhead-time">00:00:00</span> <span style="font-size:11px;color:var(--text-muted);margin-left:8px;"> Double-click empty track area to add a clip </span>
+   </div><!-- Timeline -->
+   <div id="main">
+    <div id="timeline-container"><!-- Ruler row -->
+     <div id="ruler-row">
+      <div id="ruler-label-spacer"></div>
+      <div id="ruler-scroll-wrap">
+       <canvas id="ruler-canvas"></canvas>
+       <div id="ruler-playhead"></div>
+      </div>
+     </div><!-- Tracks area -->
+     <div id="tracks-area">
+      <div id="labels-col"></div>
+      <div id="tracks-scroll">
+       <div id="tracks-inner">
+        <canvas id="grid-canvas"></canvas>
+        <div id="playhead"></div><!-- track rows inserted here -->
+       </div>
+      </div>
+     </div>
+    </div>
+   </div>
+  </div><!-- ══ ADD LAYER MODAL ════════════════════════════════ -->
+  <div class="modal-overlay hidden" id="layer-modal">
+   <div class="modal">
+    <h2 id="layer-modal-title">Add Layer</h2>
+    <div class="form-row"><label for="layer-name-input">Layer Name</label> <input type="text" id="layer-name-input" placeholder="Layer name…" maxlength="40">
+    </div>
+    <div class="form-row"><label for="layer-color-input">Color</label> <input type="color" id="layer-color-input" value="#5b7cfa">
+    </div>
+    <div class="modal-actions"><button class="btn" id="layer-cancel-btn">Cancel</button> <button class="btn primary" id="layer-save-btn">Save</button>
+    </div>
+   </div>
+  </div><!-- ══ ADD CLIP MODAL ═════════════════════════════════ -->
+  <div class="modal-overlay hidden" id="clip-modal">
+   <div class="modal">
+    <h2>Add Clip</h2>
+    <div class="form-row"><label for="clip-name-input">Clip Name</label> <input type="text" id="clip-name-input" placeholder="Clip name…" maxlength="60">
+    </div>
+    <div class="form-row"><label for="clip-color-input">Color (leave default to use track color)</label> <input type="color" id="clip-color-input" value="#5b7cfa">
+    </div>
+    <div class="modal-actions"><button class="btn" id="clip-cancel-btn">Cancel</button> <button class="btn primary" id="clip-save-btn">Add Clip</button>
+    </div>
+   </div>
+  </div><!-- ══ CONTEXT MENU ════════════════════════════════════ -->
+  <div id="ctx-menu">
+   <div class="ctx-item" id="ctx-rename">
+    Rename Clip
+   </div>
+   <div class="ctx-item" id="ctx-color">
+    Change Color
+   </div>
+   <div class="ctx-sep"></div>
+   <div class="ctx-item danger" id="ctx-delete">
+    Delete Clip
+   </div>
+  </div><!-- Toast -->
+  <div id="toast"></div>
+  <script>
+/* ═══════════════════════════════════════════════════════
+   TIMELINE EDITOR — main.js
+   ═══════════════════════════════════════════════════════ */
+
+// ── State ──────────────────────────────────────────────
+let state = {
+  duration: 300,   // seconds
+  zoom: 1,         // pixels per second multiplier base = 2
+  snapEnabled: true,
+  snapGrid: 5,     // seconds
+  playheadTime: 0, // seconds
+  isPlaying: false,
+  layers: []
+};
+
+const BASE_PX_PER_SEC = 2; // at zoom=1, 1 second = 2px
+let pxPerSec = () => BASE_PX_PER_SEC * state.zoom;
+
+// ── Helpers ────────────────────────────────────────────
+let idCounter = Date.now();
+function uid() { return 'id_' + (++idCounter); }
+
+function secToStr(s) {
+  s = Math.max(0, Math.round(s));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  return [h, m, sec].map(v => String(v).padStart(2, '0')).join(':');
+}
+
+function clamp(v, min, max) { return Math.min(max, Math.max(min, v)); }
+
+function snap(sec) {
+  if (!state.snapEnabled) return sec;
+  return Math.round(sec / state.snapGrid) * state.snapGrid;
+}
+
+function showToast(msg, dur = 2000) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), dur);
+}
+
+// ── DOM refs ───────────────────────────────────────────
+const labelsCol    = document.getElementById('labels-col');
+const tracksInner  = document.getElementById('tracks-inner');
+const tracksScroll = document.getElementById('tracks-scroll');
+const rulerCanvas  = document.getElementById('ruler-canvas');
+const rulerScrollW = document.getElementById('ruler-scroll-wrap');
+const gridCanvas   = document.getElementById('grid-canvas');
+const playheadEl   = document.getElementById('playhead');
+const rulerPH      = document.getElementById('ruler-playhead');
+const playheadTime = document.getElementById('playhead-time');
+const playBtn      = document.getElementById('play-btn');
+
+// ── Timeline dimensions ────────────────────────────────
+function timelineWidth() {
+  return Math.max(state.duration * pxPerSec(), tracksScroll.clientWidth);
+}
+function totalTrackHeight() {
+  return state.layers.length * parseInt(getComputedStyle(document.documentElement).getPropertyValue('--track-h') || '48');
+}
+const TRACK_H = () => parseInt(getComputedStyle(document.documentElement).getPropertyValue('--track-h')) || 48;
+
+// ── Ruler ──────────────────────────────────────────────
+function drawRuler() {
+  const w = timelineWidth();
+  const h = rulerCanvas.parentElement.clientHeight;
+  rulerCanvas.width  = w;
+  rulerCanvas.height = h;
+  const ctx = rulerCanvas.getContext('2d');
+  ctx.clearRect(0, 0, w, h);
+
+  const pps = pxPerSec();
+  // Choose ruler interval based on zoom
+  let interval = 1;
+  const targets = [1,2,5,10,15,30,60,120,300,600,1800,3600];
+  for (const t of targets) {
+    if (pps * t >= 60) { interval = t; break; }
+    interval = t;
+  }
+
+  ctx.font = '10px Segoe UI, system-ui, sans-serif';
+  ctx.fillStyle = '#6b7280';
+  ctx.strokeStyle = '#2a2d3a';
+
+  // Minor ticks (every interval/5 if space allows)
+  const minor = interval / 5;
+  if (pps * minor >= 8) {
+    ctx.beginPath();
+    for (let s = 0; s <= state.duration; s += minor) {
+      const x = Math.round(s * pps) + 0.5;
+      ctx.moveTo(x, h - 6); ctx.lineTo(x, h);
+    }
+    ctx.strokeStyle = '#222533';
+    ctx.stroke();
+  }
+
+  // Major ticks + labels
+  ctx.strokeStyle = '#3a3e52';
+  ctx.lineWidth = 1;
+  for (let s = 0; s <= state.duration; s += interval) {
+    const x = Math.round(s * pps) + 0.5;
+    ctx.beginPath(); ctx.moveTo(x, h / 2); ctx.lineTo(x, h); ctx.stroke();
+    const label = secToStr(s);
+    ctx.fillStyle = '#9ca3af';
+    ctx.fillText(label, x + 3, h / 2 + 9);
+  }
+
+  // Playhead on ruler
+  const phx = state.playheadTime * pps;
+  rulerPH.style.left = phx + 'px';
+  rulerPH.style.height = h + 'px';
+}
+
+// ── Grid ───────────────────────────────────────────────
+function drawGrid() {
+  const w = timelineWidth();
+  const h = totalTrackHeight() || tracksScroll.clientHeight;
+  gridCanvas.width  = w;
+  gridCanvas.height = h;
+  const ctx = gridCanvas.getContext('2d');
+  ctx.clearRect(0, 0, w, h);
+  const pps = pxPerSec();
+  let interval = 1;
+  const targets = [1,2,5,10,15,30,60,120,300,600,1800,3600];
+  for (const t of targets) { if (pps * t >= 60) { interval = t; break; } interval = t; }
+  ctx.strokeStyle = 'rgba(42,45,58,0.7)';
+  ctx.lineWidth = 1;
+  for (let s = 0; s <= state.duration; s += interval) {
+    const x = Math.round(s * pps) + 0.5;
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+  }
+}
+
+// ── Playhead ───────────────────────────────────────────
+function updatePlayheadUI() {
+  const x = state.playheadTime * pxPerSec();
+  playheadEl.style.left = x + 'px';
+  playheadEl.style.height = (totalTrackHeight() || tracksScroll.clientHeight) + 'px';
+  rulerPH.style.left = x + 'px';
+  playheadTime.textContent = secToStr(state.playheadTime);
+  // Auto-scroll if out of view
+  const sw = tracksScroll;
+  const vl = sw.scrollLeft, vr = vl + sw.clientWidth;
+  if (x < vl || x > vr - 40) {
+    sw.scrollLeft = Math.max(0, x - sw.clientWidth / 3);
+  }
+}
+
+// Sync ruler scroll with tracks scroll
+tracksScroll.addEventListener('scroll', () => {
+  rulerScrollW.scrollLeft = tracksScroll.scrollLeft;
+  labelsCol.scrollTop     = tracksScroll.scrollTop;
+});
+
+// ── Ruler playhead drag ────────────────────────────────
+(function() {
+  let dragging = false;
+  rulerPH.addEventListener('mousedown', e => {
+    dragging = true; e.stopPropagation(); e.preventDefault();
+  });
+  // Also click on ruler canvas to seek
+  rulerScrollW.addEventListener('mousedown', e => {
+    if (e.target === rulerPH) return;
+    const rect = rulerScrollW.getBoundingClientRect();
+    const x = e.clientX - rect.left + tracksScroll.scrollLeft;
+    state.playheadTime = clamp(x / pxPerSec(), 0, state.duration);
+    updatePlayheadUI();
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const rect = rulerScrollW.getBoundingClientRect();
+    const x = e.clientX - rect.left + tracksScroll.scrollLeft;
+    state.playheadTime = clamp(x / pxPerSec(), 0, state.duration);
+    updatePlayheadUI();
+  });
+  document.addEventListener('mouseup', () => { dragging = false; });
+})();
+
+// ── Playback ───────────────────────────────────────────
+let playTimer = null;
+function startPlay() {
+  state.isPlaying = true; playBtn.textContent = '⏸';
+  const startWall = performance.now();
+  const startPH   = state.playheadTime;
+  function tick() {
+    const elapsed = (performance.now() - startWall) / 1000;
+    state.playheadTime = startPH + elapsed;
+    if (state.playheadTime >= state.duration) {
+      state.playheadTime = state.duration;
+      updatePlayheadUI(); stopPlay(); return;
+    }
+    updatePlayheadUI();
+    playTimer = requestAnimationFrame(tick);
+  }
+  playTimer = requestAnimationFrame(tick);
+}
+function stopPlay() {
+  state.isPlaying = false; playBtn.textContent = '▶';
+  if (playTimer) { cancelAnimationFrame(playTimer); playTimer = null; }
+}
+playBtn.addEventListener('click', () => {
+  if (state.isPlaying) stopPlay();
+  else { if (state.playheadTime >= state.duration) state.playheadTime = 0; startPlay(); }
+});
+
+// ── Full render ────────────────────────────────────────
+function fullRender() {
+  const w = timelineWidth();
+  tracksInner.style.width  = w + 'px';
+  tracksInner.style.minHeight = (totalTrackHeight() || 200) + 'px';
+  drawRuler(); drawGrid(); renderAllLayers(); updatePlayheadUI();
+}
+
+// ── Layer rendering ────────────────────────────────────
+function renderAllLayers() {
+  // Clear labels
+  labelsCol.innerHTML = '';
+  // Remove old track rows (not canvas or playhead)
+  [...tracksInner.querySelectorAll('.track-row')].forEach(el => el.remove());
+
+  state.layers.forEach((layer, li) => {
+    // Label
+    const lbl = document.createElement('div');
+    lbl.className = 'track-label';
+    lbl.dataset.layerIdx = li;
+    const swatch = document.createElement('div');
+    swatch.className = 'label-swatch';
+    swatch.style.background = layer.color;
+    const name = document.createElement('div');
+    name.className = 'label-name';
+    name.textContent = layer.name;
+    name.title = 'Double-click to rename';
+    name.addEventListener('dblclick', () => openLayerModal(li));
+    const del = document.createElement('button');
+    del.className = 'label-del'; del.title = 'Delete layer'; del.textContent = '×';
+    del.addEventListener('click', () => deleteLayer(li));
+    lbl.append(swatch, name, del);
+    labelsCol.appendChild(lbl);
+
+    // Track row
+    const row = document.createElement('div');
+    row.className = 'track-row';
+    row.dataset.layerIdx = li;
+    row.style.height = TRACK_H() + 'px';
+    // Double-click to add clip
+    row.addEventListener('dblclick', e => {
+      if (e.target.closest('.clip')) return;
+      const rect = row.getBoundingClientRect();
+      const x = e.clientX - rect.left + tracksScroll.scrollLeft;
+      const startSec = snap(clamp(x / pxPerSec(), 0, state.duration - 10));
+      pendingClip = { layerIdx: li, start: startSec, end: startSec + 10 };
+      openClipModal(layer.color, layer.name + ' clip');
+    });
+    // Render clips
+    layer.items.forEach(item => {
+      row.appendChild(createClipEl(item, layer, li));
+    });
+    tracksInner.appendChild(row);
+  });
+
+  updatePlayheadUI();
+}
+
+// ── Clip element factory ───────────────────────────────
+function createClipEl(item, layer, layerIdx) {
+  const pps = pxPerSec();
+  const el = document.createElement('div');
+  el.className = 'clip';
+  el.dataset.itemId    = item.id;
+  el.dataset.layerIdx  = layerIdx;
+  el.style.left        = (item.start * pps) + 'px';
+  el.style.width       = Math.max(16, (item.end - item.start) * pps) + 'px';
+  el.style.background  = item.color || layer.color;
+
+  // Darken border via box-shadow
+  el.style.boxShadow = `inset 0 1px 0 rgba(255,255,255,.25), inset 0 -1px 0 rgba(0,0,0,.3), 0 2px 6px rgba(0,0,0,.5)`;
+
+  const rLeft = document.createElement('div');
+  rLeft.className = 'clip-resize clip-resize-left';
+  rLeft.innerHTML = `<svg viewBox="0 0 5 12" fill="none"><line x1="2" y1="1" x2="2" y2="11" stroke="rgba(0,0,0,.5)" stroke-width="1.5" stroke-linecap="round"/></svg>`;
+
+  const body = document.createElement('div');
+  body.className = 'clip-body';
+  body.textContent = item.name || 'Clip';
+
+  const rRight = document.createElement('div');
+  rRight.className = 'clip-resize clip-resize-right';
+  rRight.innerHTML = `<svg viewBox="0 0 5 12" fill="none"><line x1="2" y1="1" x2="2" y2="11" stroke="rgba(0,0,0,.5)" stroke-width="1.5" stroke-linecap="round"/></svg>`;
+
+  el.append(rLeft, body, rRight);
+
+  // Drag (move)
+  el.addEventListener('mousedown', e => {
+    if (e.target.closest('.clip-resize')) return;
+    e.preventDefault(); e.stopPropagation();
+    startClipDrag(e, item, layer, layerIdx, el);
+  });
+
+  // Resize left
+  rLeft.addEventListener('mousedown', e => {
+    e.preventDefault(); e.stopPropagation();
+    startClipResize(e, item, layer, layerIdx, el, 'left');
+  });
+  // Resize right
+  rRight.addEventListener('mousedown', e => {
+    e.preventDefault(); e.stopPropagation();
+    startClipResize(e, item, layer, layerIdx, el, 'right');
+  });
+
+  // Context menu
+  el.addEventListener('contextmenu', e => {
+    e.preventDefault(); openCtxMenu(e, item, layer, layerIdx, el);
+  });
+
+  return el;
+}
+
+// ── Clip drag ──────────────────────────────────────────
+function startClipDrag(e, item, layer, layerIdx, el) {
+  const pps = pxPerSec();
+  const startX = e.clientX;
+  const origStart = item.start;
+  const origEnd   = item.end;
+  const dur = origEnd - origStart;
+  let autoScrollId = null;
+
+  el.style.zIndex = 50;
+  el.style.opacity = '.9';
+
+  function onMove(ev) {
+    const dx = ev.clientX - startX;
+    let newStart = snap(origStart + dx / pps);
+    newStart = clamp(newStart, 0, state.duration - dur);
+    item.start = newStart;
+    item.end   = newStart + dur;
+    el.style.left = (item.start * pps) + 'px';
+
+    // Auto-scroll at edges
+    const rect  = tracksScroll.getBoundingClientRect();
+    const margin = 60;
+    if (ev.clientX < rect.left + margin) {
+      if (!autoScrollId) autoScrollId = setInterval(() => { tracksScroll.scrollLeft -= 8; }, 16);
+    } else if (ev.clientX > rect.right - margin) {
+      if (!autoScrollId) autoScrollId = setInterval(() => { tracksScroll.scrollLeft += 8; }, 16);
+    } else {
+      clearInterval(autoScrollId); autoScrollId = null;
+    }
+  }
+  function onUp() {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    clearInterval(autoScrollId);
+    el.style.zIndex = '';
+    el.style.opacity = '';
+  }
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+}
+
+// ── Clip resize ────────────────────────────────────────
+function startClipResize(e, item, layer, layerIdx, el, side) {
+  const pps = pxPerSec();
+  const startX  = e.clientX;
+  const origStart = item.start;
+  const origEnd   = item.end;
+  el.style.zIndex = 50;
+
+  function onMove(ev) {
+    const dx = ev.clientX - startX;
+    if (side === 'left') {
+      let ns = snap(origStart + dx / pps);
+      ns = clamp(ns, 0, item.end - 1);
+      item.start = ns;
+      el.style.left  = (item.start * pps) + 'px';
+      el.style.width = Math.max(16, (item.end - item.start) * pps) + 'px';
+    } else {
+      let ne = snap(origEnd + dx / pps);
+      ne = clamp(ne, item.start + 1, state.duration);
+      item.end = ne;
+      el.style.width = Math.max(16, (item.end - item.start) * pps) + 'px';
+    }
+  }
+  function onUp() {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    el.style.zIndex = '';
+  }
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+}
+
+// ── Context menu ───────────────────────────────────────
+let ctxTarget = null;
+function openCtxMenu(e, item, layer, layerIdx, el) {
+  ctxTarget = { item, layer, layerIdx, el };
+  const m = document.getElementById('ctx-menu');
+  m.style.display = 'block';
+  m.style.left = e.clientX + 'px';
+  m.style.top  = e.clientY + 'px';
+  // Keep in viewport
+  requestAnimationFrame(() => {
+    const mb = m.getBoundingClientRect();
+    if (mb.right  > window.innerWidth)  m.style.left = (e.clientX - mb.width)  + 'px';
+    if (mb.bottom > window.innerHeight) m.style.top  = (e.clientY - mb.height) + 'px';
+  });
+}
+document.addEventListener('click', () => { document.getElementById('ctx-menu').style.display = 'none'; });
+
+document.getElementById('ctx-rename').addEventListener('click', () => {
+  if (!ctxTarget) return;
+  const newName = prompt_inline('Rename clip', ctxTarget.item.name);
+  // use a simple overlay-free approach: we'll use a custom inline rename
+  // (We can't use prompt — use a quick modal trick)
+  openRenameModal(ctxTarget.item, ctxTarget.el);
+});
+document.getElementById('ctx-color').addEventListener('click', () => {
+  if (!ctxTarget) return;
+  const inp = document.createElement('input');
+  inp.type = 'color'; inp.value = ctxTarget.item.color || ctxTarget.layer.color;
+  inp.style.position = 'fixed'; inp.style.opacity = '0'; inp.style.pointerEvents = 'none';
+  document.body.appendChild(inp);
+  inp.addEventListener('input', e => {
+    ctxTarget.item.color = e.target.value;
+    ctxTarget.el.style.background = e.target.value;
+  });
+  inp.addEventListener('change', () => { document.body.removeChild(inp); });
+  inp.click();
+});
+document.getElementById('ctx-delete').addEventListener('click', () => {
+  if (!ctxTarget) return;
+  const { item, layer, el } = ctxTarget;
+  layer.items = layer.items.filter(i => i.id !== item.id);
+  el.remove();
+  showToast('Clip deleted');
+});
+
+// Simple rename modal (reuse layer modal as rename)
+let renameTarget = null;
+function openRenameModal(item, el) {
+  renameTarget = { item, el };
+  const modal = document.getElementById('layer-modal');
+  document.getElementById('layer-modal-title').textContent = 'Rename Clip';
+  document.getElementById('layer-name-input').value = item.name || '';
+  document.getElementById('layer-color-input').value = item.color || '#5b7cfa';
+  modal._mode = 'rename-clip';
+  modal.classList.remove('hidden');
+  document.getElementById('layer-name-input').focus();
+}
+
+// ── Inline prompt helper (unused, but available) ───────
+function prompt_inline(_, v) { return v; } // placeholder
+
+// ── Layer Modal ────────────────────────────────────────
+let editLayerIdx = null;
+function openLayerModal(idx) {
+  editLayerIdx = idx;
+  const modal = document.getElementById('layer-modal');
+  modal._mode = 'layer';
+  document.getElementById('layer-modal-title').textContent = idx == null ? 'Add Layer' : 'Edit Layer';
+  if (idx != null) {
+    document.getElementById('layer-name-input').value  = state.layers[idx].name;
+    document.getElementById('layer-color-input').value = state.layers[idx].color;
+  } else {
+    document.getElementById('layer-name-input').value  = '';
+    document.getElementById('layer-color-input').value = randomColor();
+  }
+  modal.classList.remove('hidden');
+  document.getElementById('layer-name-input').focus();
+}
+
+function randomColor() {
+  const colors = ['#5b7cfa','#f97316','#22c55e','#a855f7','#ec4899','#14b8a6','#eab308','#ef4444','#06b6d4'];
+  return colors[Math.floor(Math.random() * colors.length)];
+}
+
+document.getElementById('add-layer-btn').addEventListener('click', () => openLayerModal(null));
+document.getElementById('layer-cancel-btn').addEventListener('click', () => {
+  document.getElementById('layer-modal').classList.add('hidden');
+});
+document.getElementById('layer-save-btn').addEventListener('click', () => {
+  const modal = document.getElementById('layer-modal');
+  const name  = document.getElementById('layer-name-input').value.trim() || 'Layer';
+  const color = document.getElementById('layer-color-input').value;
+  if (modal._mode === 'rename-clip') {
+    if (renameTarget) {
+      renameTarget.item.name = name;
+      renameTarget.item.color = color;
+      renameTarget.el.style.background = color;
+      renameTarget.el.querySelector('.clip-body').textContent = name;
+    }
+    renameTarget = null;
+  } else if (editLayerIdx != null) {
+    state.layers[editLayerIdx].name  = name;
+    state.layers[editLayerIdx].color = color;
+    fullRender();
+  } else {
+    state.layers.push({ id: uid(), name, color, items: [] });
+    fullRender();
+  }
+  modal.classList.add('hidden');
+  editLayerIdx = null;
+});
+document.querySelectorAll('.modal-overlay').forEach(m => {
+  m.addEventListener('mousedown', e => { if (e.target === m) m.classList.add('hidden'); });
+});
+
+// Enter key in inputs
+['layer-name-input'].forEach(id => {
+  document.getElementById(id).addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('layer-save-btn').click();
+    if (e.key === 'Escape') document.getElementById('layer-modal').classList.add('hidden');
+  });
+});
+['clip-name-input'].forEach(id => {
+  document.getElementById(id).addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('clip-save-btn').click();
+    if (e.key === 'Escape') document.getElementById('clip-modal').classList.add('hidden');
+  });
+});
+
+// ── Delete Layer ───────────────────────────────────────
+function deleteLayer(idx) {
+  state.layers.splice(idx, 1);
+  fullRender();
+  showToast('Layer deleted');
+}
+
+// ── Add Clip Modal ─────────────────────────────────────
+let pendingClip = null;
+function openClipModal(defaultColor, defaultName) {
+  document.getElementById('clip-name-input').value = defaultName || 'New Clip';
+  document.getElementById('clip-color-input').value = defaultColor || randomColor();
+  document.getElementById('clip-modal').classList.remove('hidden');
+  document.getElementById('clip-name-input').focus();
+  document.getElementById('clip-name-input').select();
+}
+document.getElementById('clip-cancel-btn').addEventListener('click', () => {
+  document.getElementById('clip-modal').classList.add('hidden'); pendingClip = null;
+});
+document.getElementById('clip-save-btn').addEventListener('click', () => {
+  if (!pendingClip) return;
+  const name  = document.getElementById('clip-name-input').value.trim() || 'Clip';
+  const color = document.getElementById('clip-color-input').value;
+  const layer = state.layers[pendingClip.layerIdx];
+  const item  = { id: uid(), name, start: pendingClip.start, end: pendingClip.end, color };
+  layer.items.push(item);
+  // Append clip to existing row without full re-render
+  const row = tracksInner.querySelectorAll('.track-row')[pendingClip.layerIdx];
+  if (row) row.appendChild(createClipEl(item, layer, pendingClip.layerIdx));
+  document.getElementById('clip-modal').classList.add('hidden');
+  pendingClip = null;
+  showToast('Clip added! Drag to reposition.');
+});
+
+// ── Duration ───────────────────────────────────────────
+function readDuration() {
+  const h = parseInt(document.getElementById('dur-h').value) || 0;
+  const m = parseInt(document.getElementById('dur-m').value) || 0;
+  const s = parseInt(document.getElementById('dur-s').value) || 0;
+  return Math.max(10, h * 3600 + m * 60 + s);
+}
+function applyDuration() {
+  state.duration = readDuration();
+  state.playheadTime = clamp(state.playheadTime, 0, state.duration);
+  fullRender();
+}
+document.getElementById('apply-dur').addEventListener('click', applyDuration);
+
+// ── Zoom ───────────────────────────────────────────────
+function applyZoom(z) {
+  const prevScroll = tracksScroll.scrollLeft;
+  const prevCenter = (prevScroll + tracksScroll.clientWidth / 2) / pxPerSec();
+  state.zoom = clamp(z, 0.1, 40);
+  document.getElementById('zoom-label').textContent = Math.round(state.zoom * 100) + '%';
+  fullRender();
+  // Try to keep the center stable
+  tracksScroll.scrollLeft = prevCenter * pxPerSec() - tracksScroll.clientWidth / 2;
+  rulerScrollW.scrollLeft = tracksScroll.scrollLeft;
+}
+document.getElementById('zoom-in').addEventListener('click',  () => applyZoom(state.zoom * 1.5));
+document.getElementById('zoom-out').addEventListener('click', () => applyZoom(state.zoom / 1.5));
+
+// Mouse wheel zoom (Ctrl + scroll)
+tracksScroll.addEventListener('wheel', e => {
+  if (e.ctrlKey || e.metaKey) {
+    e.preventDefault();
+    applyZoom(state.zoom * (e.deltaY < 0 ? 1.15 : 0.87));
+  }
+}, { passive: false });
+
+// Horizontal scroll via shift+wheel
+tracksScroll.addEventListener('wheel', e => {
+  if (!e.ctrlKey && !e.metaKey) {
+    // If horizontal delta, let default handle it; else convert vertical to horizontal
+    if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+      // let it bubble naturally (horizontal scroll)
+    } else {
+      // Normal vertical = vertical scroll (for layers)
+    }
+  }
+}, { passive: true });
+
+// ── Snap toggle ────────────────────────────────────────
+document.getElementById('snap-btn').addEventListener('click', () => {
+  state.snapEnabled = !state.snapEnabled;
+  document.getElementById('snap-btn').classList.toggle('active', state.snapEnabled);
+  showToast('Snap ' + (state.snapEnabled ? 'enabled' : 'disabled'));
+});
+
+// ── Export / Import ────────────────────────────────────
+document.getElementById('export-btn').addEventListener('click', () => {
+  const data = {
+    duration: state.duration,
+    zoom: state.zoom,
+    layers: state.layers.map(l => ({
+      id: l.id, name: l.name, color: l.color,
+      items: l.items.map(it => ({ id: it.id, name: it.name, start: it.start, end: it.end, color: it.color || null }))
+    }))
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url;
+  a.download = 'timeline.json'; a.click();
+  URL.revokeObjectURL(url);
+  showToast('Timeline exported!');
+});
+
+document.getElementById('import-btn').addEventListener('click', () => {
+  document.getElementById('import-file').click();
+});
+document.getElementById('import-file').addEventListener('change', e => {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (typeof data.duration === 'number') state.duration = data.duration;
+      if (typeof data.zoom     === 'number') state.zoom     = data.zoom;
+      if (Array.isArray(data.layers)) state.layers = data.layers;
+      // Restore dur inputs
+      const h = Math.floor(state.duration / 3600);
+      const m = Math.floor((state.duration % 3600) / 60);
+      const s = state.duration % 60;
+      document.getElementById('dur-h').value = h;
+      document.getElementById('dur-m').value = m;
+      document.getElementById('dur-s').value = s;
+      document.getElementById('zoom-label').textContent = Math.round(state.zoom * 100) + '%';
+      fullRender();
+      showToast('Timeline imported successfully!');
+    } catch {
+      showToast('⚠ Invalid JSON file');
+    }
+    e.target.value = '';
+  };
+  reader.readAsText(file);
+});
+
+// ── Keyboard shortcuts ─────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.code === 'Space') { e.preventDefault(); playBtn.click(); }
+  if (e.code === 'Equal' || e.code === 'NumpadAdd')    applyZoom(state.zoom * 1.2);
+  if (e.code === 'Minus' || e.code === 'NumpadSubtract') applyZoom(state.zoom / 1.2);
+  if (e.code === 'Home') { tracksScroll.scrollLeft = 0; }
+  if (e.code === 'End')  { tracksScroll.scrollLeft = timelineWidth(); }
+});
+
+// ── Window resize ──────────────────────────────────────
+window.addEventListener('resize', () => fullRender());
+
+// ── Init ───────────────────────────────────────────────
+function init() {
+  // Seed with sample data
+  state.layers = [
+    {
+      id: uid(), name: 'Video', color: '#5b7cfa',
+      items: [
+        { id: uid(), name: 'Intro', start: 0,  end: 30, color: '#5b7cfa' },
+        { id: uid(), name: 'Scene A', start: 35, end: 90, color: '#4a68e0' },
+        { id: uid(), name: 'Outro', start: 240, end: 300, color: '#6b8cff' },
+      ]
+    },
+    {
+      id: uid(), name: 'Audio', color: '#22c55e',
+      items: [
+        { id: uid(), name: 'Narration', start: 0,  end: 120, color: '#22c55e' },
+        { id: uid(), name: 'Music', start: 100, end: 300, color: '#16a34a' },
+      ]
+    },
+    {
+      id: uid(), name: 'Titles', color: '#f97316',
+      items: [
+        { id: uid(), name: 'Title Card', start: 5,  end: 20, color: '#f97316' },
+        { id: uid(), name: 'Lower Third', start: 40, end: 60, color: '#ea6a0a' },
+      ]
+    },
+    {
+      id: uid(), name: 'Effects', color: '#a855f7',
+      items: [
+        { id: uid(), name: 'Fade In',  start: 0,  end: 5,  color: '#a855f7' },
+        { id: uid(), name: 'Fade Out', start: 295, end: 300, color: '#9333ea' },
+      ]
+    },
+  ];
+  fullRender();
+}
+
+// Initialize Element SDK
+window.elementSdk && window.elementSdk.init({
+  defaultConfig: { app_title: '⏱ Timeline Visualizer' },
+  onConfigChange: async (cfg) => {
+    document.getElementById('app-title').textContent = cfg.app_title || '⏱ Timeline Visualizer';
+  },
+  mapToCapabilities: (cfg) => ({ recolorables: [], borderables: [], fontEditable: undefined, fontSizeable: undefined }),
+  mapToEditPanelValues: (cfg) => new Map([['app_title', cfg.app_title || '⏱ Timeline Visualizer']])
+});
+
+init();
+</script>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9e40e7b0735b97d4',t:'MTc3NDgwODU5OS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
