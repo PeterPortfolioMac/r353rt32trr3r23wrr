@@ -470,6 +470,21 @@
     <div class="modal-actions"><button class="btn" id="range-cancel-btn">Cancel</button> <button class="btn primary" id="range-save-btn">Save</button>
     </div>
    </div>
+  </div><!-- ══ NOTE VIEW MODAL ════════════════════════════════ -->
+  <div class="modal-overlay hidden" id="note-view-modal">
+   <div class="modal">
+    <h2 id="note-view-title">Note</h2>
+    <div class="form-row">
+      <label>Interval</label>
+      <div id="note-view-time" style="font-size:12px;color:var(--text-primary);font-family:'Courier New', monospace;">00:00:00–00:00:00</div>
+    </div>
+    <div class="form-row">
+      <label>Content</label>
+      <div id="note-view-content" style="background:var(--bg-secondary);border:1px solid var(--border);color:var(--text-primary);font-size:13px;line-height:1.5;padding:10px 12px;border-radius:6px;white-space:pre-wrap;word-break:break-word;min-height:96px;">No details</div>
+    </div>
+    <div class="modal-actions"><button class="btn primary" id="note-view-close-btn">Close</button>
+    </div>
+   </div>
   </div><!-- ══ CONTEXT MENU ════════════════════════════════════ -->
   <div id="ctx-menu">
    <div class="ctx-item" id="ctx-edit">
@@ -535,6 +550,17 @@ function showToast(msg, dur = 2000) {
   setTimeout(() => t.classList.remove('show'), dur);
 }
 
+function openNoteViewModal(item) {
+  document.getElementById('note-view-title').textContent = item?.name || 'Note';
+  document.getElementById('note-view-time').textContent = `${secToStr(item?.start || 0)}–${secToStr(item?.end || 0)}`;
+  document.getElementById('note-view-content').textContent = (item?.note || '').trim() || 'No details';
+  document.getElementById('note-view-modal').classList.remove('hidden');
+}
+
+function closeNoteViewModal() {
+  document.getElementById('note-view-modal').classList.add('hidden');
+}
+
 // ── DOM refs ───────────────────────────────────────────
 const labelsCol    = document.getElementById('labels-col');
 const tracksInner  = document.getElementById('tracks-inner');
@@ -548,6 +574,8 @@ const rangePreview = document.getElementById('range-preview');
 const rulerPH      = document.getElementById('ruler-playhead');
 const playheadTime = document.getElementById('playhead-time');
 const playBtn      = document.getElementById('play-btn');
+
+document.getElementById('note-view-close-btn').addEventListener('click', closeNoteViewModal);
 
 // ── Timeline dimensions ────────────────────────────────
 function timelineWidth() {
@@ -936,6 +964,34 @@ function createRangeEl(item, kind) {
     if (e.target.classList.contains('range-handle')) return;
     e.preventDefault(); e.stopPropagation();
     selectRange(kind, item.id);
+
+    if (kind === 'note') {
+      const originX = e.clientX;
+      const originY = e.clientY;
+      let moved = false;
+
+      function onMove(ev) {
+        if (Math.abs(ev.clientX - originX) < 4 && Math.abs(ev.clientY - originY) < 4) return;
+        moved = true;
+        cleanup();
+        startRangeDrag(ev, item, kind, el, { startX: originX });
+      }
+
+      function onUp() {
+        cleanup();
+        if (!moved) openNoteViewModal(item);
+      }
+
+      function cleanup() {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      }
+
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+      return;
+    }
+
     startRangeDrag(e, item, kind, el);
   });
   left.addEventListener('mousedown', e => {
@@ -969,9 +1025,9 @@ function getRangeStore(kind) {
   return kind === 'section' ? state.sections : state.notes;
 }
 
-function startRangeDrag(e, item, kind, el) {
+function startRangeDrag(e, item, kind, el, opts = {}) {
   const pps = pxPerSec();
-  const startX = e.clientX;
+  const startX = opts.startX ?? e.clientX;
   const origStart = item.start;
   const origEnd = item.end;
   const dur = origEnd - origStart;
@@ -1308,6 +1364,10 @@ document.getElementById('layer-save-btn').addEventListener('click', () => {
 });
 document.querySelectorAll('.modal-overlay').forEach(m => {
   m.addEventListener('mousedown', e => { if (e.target === m) m.classList.add('hidden'); });
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeNoteViewModal();
 });
 
 // Enter key in inputs
