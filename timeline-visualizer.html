@@ -1352,7 +1352,7 @@ document.getElementById('clip-save-btn').addEventListener('click', () => {
   const item  = { id: uid(), name, start: pendingClip.start, end: pendingClip.end, color };
   layer.items.push(item);
   // Append clip to existing row without full re-render
-  const row = tracksInner.querySelectorAll('.track-row')[pendingClip.layerIdx];
+  const row = tracksInner.querySelector(`.track-row[data-layer-idx="${pendingClip.layerIdx}"]`);
   if (row) row.appendChild(createClipEl(item, layer, pendingClip.layerIdx));
   document.getElementById('clip-modal').classList.add('hidden');
   pendingClip = null;
